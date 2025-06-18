@@ -1,17 +1,13 @@
 {
   "domain": "market_prediction",
   "name": "Market Prediction System",
-  "version": "2.0.0",
-  "codeowners": ["@yourusername"],
+  "version": "2.1.0",
   "config_flow": true,
-  "documentation": "https://github.com/yourusername/ha-market-prediction",
-  "issue_tracker": "https://github.com/yourusername/ha-market-prediction/issues",
-  "requirements": [
-    "requests>=2.25.0",
-    "aiohttp>=3.8.0"
-  ],
-  "dependencies": [],
-  "homeassistant": "2025.1.0",
+  "documentation": "https://github.com/BestMasterChief/ha-market-prediction",
+  "issue_tracker": "https://github.com/BestMasterChief/ha-market-prediction/issues",
+  "dependencies": ["http"],
+  "codeowners": ["@BestMasterChief"],
+  "requirements": ["aiohttp>=3.8.0", "asyncio-throttle>=1.0.2"],
   "iot_class": "cloud_polling",
-  "loggers": ["custom_components.market_prediction"]
+  "integration_type": "service"
 }

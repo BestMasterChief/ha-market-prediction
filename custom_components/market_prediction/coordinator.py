@@ -1,4 +1,4 @@
-"""DataUpdateCoordinator for Market Prediction."""
+"""Data update coordinator for Market Prediction."""
 from __future__ import annotations
 
 import asyncio
@@ -7,11 +7,11 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
-import async_timeout
+from asyncio_throttle import Throttler
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -20,333 +20,337 @@ from .const import (
     CONF_FMP_API_KEY,
     ALPHA_VANTAGE_BASE_URL,
     FMP_BASE_URL,
-    PROGRESS_IDLE,
-    PROGRESS_FETCHING_DATA,
-    PROGRESS_PROCESSING_TECHNICAL,
-    PROGRESS_PROCESSING_SENTIMENT,
-    PROGRESS_CALCULATING,
-    PROGRESS_COMPLETE,
-    PROGRESS_ERROR,
-    ERROR_NO_API_KEY,
-    ERROR_API_ERROR,
-    MAX_PREDICTION_CHANGE,
+    DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_TIMEOUT,
+    SUPPORTED_SYMBOLS,
+    PROGRESS_STAGES,
+    ALPHA_VANTAGE_DAILY_LIMIT,
+    FMP_DAILY_LIMIT,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class MarketPredictionDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching data from the API."""
+class MarketPredictionCoordinator(DataUpdateCoordinator):
+    """Class to manage fetching market prediction data."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        logger: logging.Logger,
-        name: str,
-        update_interval: timedelta,
-        entry: ConfigEntry,
-    ) -> None:
-        """Initialize."""
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """Initialize the coordinator."""
         self.entry = entry
-        self._alpha_vantage_key = entry.data.get(CONF_ALPHA_VANTAGE_API_KEY)
-        self._fmp_key = entry.data.get(CONF_FMP_API_KEY)
-        self._progress_state = PROGRESS_IDLE
-        self._progress_percentage = 0
-        self._eta = None
+        self.alpha_vantage_api_key = entry.data[CONF_ALPHA_VANTAGE_API_KEY]
+        self.fmp_api_key = entry.data.get(CONF_FMP_API_KEY)
         
-        super().__init__(hass, logger, name=name, update_interval=update_interval)
+        # Progress tracking
+        self._current_stage = "initializing"
+        self._current_progress = 0
+        self._eta = None
+        self._stage_start_time = None
+        
+        # API call tracking
+        self._alpha_vantage_calls_today = 0
+        self._fmp_calls_today = 0
+        self._last_reset_date = datetime.now().date()
+        
+        # Throttling to prevent API abuse
+        self._av_throttler = Throttler(rate_limit=5, period=60)  # 5 calls per minute
+        self._fmp_throttler = Throttler(rate_limit=4, period=60)  # 4 calls per minute
+        
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=DEFAULT_UPDATE_INTERVAL,
+        )
 
-    @property
-    def progress_state(self) -> str:
-        """Return current progress state."""
-        return self._progress_state
+    async def _async_setup(self) -> None:
+        """Set up the coordinator."""
+        self._update_progress("initializing")
+        _LOGGER.info("Market Prediction coordinator setup complete")
 
-    @property
-    def progress_percentage(self) -> int:
-        """Return current progress percentage."""
-        return self._progress_percentage
+    def _update_progress(self, stage: str) -> None:
+        """Update the current progress stage."""
+        if stage in PROGRESS_STAGES:
+            self._current_stage = stage
+            self._current_progress = PROGRESS_STAGES[stage]["progress"]
+            self._stage_start_time = datetime.now()
+            
+            # Calculate ETA based on typical stage durations
+            stage_durations = {
+                "initializing": 10,
+                "fetching_data": 30,
+                "processing_technical": 20,
+                "processing_sentiment": 15,
+                "calculating": 10,
+            }
+            
+            if stage != "complete":
+                remaining_time = stage_durations.get(stage, 30)
+                self._eta = datetime.now() + timedelta(seconds=remaining_time)
+            else:
+                self._eta = None
+                
+            _LOGGER.debug(f"Progress updated: {stage} ({self._current_progress}%)")
 
-    @property
-    def eta(self) -> datetime | None:
-        """Return estimated time of completion."""
-        return self._eta
-
-    def _set_progress(self, state: str, percentage: int = 0, eta_minutes: int = 0) -> None:
-        """Set the current progress state."""
-        self._progress_state = state
-        self._progress_percentage = percentage
-        if eta_minutes > 0:
-            self._eta = datetime.now() + timedelta(minutes=eta_minutes)
-        else:
-            self._eta = None
+    def _reset_daily_counters(self) -> None:
+        """Reset daily API call counters if needed."""
+        today = datetime.now().date()
+        if today != self._last_reset_date:
+            self._alpha_vantage_calls_today = 0
+            self._fmp_calls_today = 0
+            self._last_reset_date = today
+            _LOGGER.info("API call counters reset for new day")
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Update data via library."""
-        if not self._alpha_vantage_key:
-            raise UpdateFailed(ERROR_NO_API_KEY)
-
+        """Fetch data from APIs with proper progress tracking."""
+        self._reset_daily_counters()
+        
         try:
-            self._set_progress(PROGRESS_FETCHING_DATA, 10, 3)
+            self._update_progress("fetching_data")
+            
+            # Check API limits
+            if self._alpha_vantage_calls_today >= ALPHA_VANTAGE_DAILY_LIMIT:
+                raise UpdateFailed("Alpha Vantage daily API limit exceeded")
             
             # Fetch market data
             market_data = await self._fetch_market_data()
             
-            self._set_progress(PROGRESS_PROCESSING_TECHNICAL, 40, 2)
+            self._update_progress("processing_technical")
             
-            # Process technical indicators
-            technical_data = await self._process_technical_indicators(market_data)
+            # Process technical analysis
+            technical_analysis = await self._process_technical_analysis(market_data)
             
-            self._set_progress(PROGRESS_PROCESSING_SENTIMENT, 70, 1)
-            
-            # Process sentiment data if FMP key available
             sentiment_data = {}
-            if self._fmp_key:
+            if self.fmp_api_key and self._fmp_calls_today < FMP_DAILY_LIMIT:
+                self._update_progress("processing_sentiment")
                 sentiment_data = await self._fetch_sentiment_data()
+            else:
+                _LOGGER.info("Skipping sentiment analysis - no FMP API key or limit exceeded")
             
-            self._set_progress(PROGRESS_CALCULATING, 90, 0)
+            self._update_progress("calculating")
             
             # Generate predictions
-            predictions = await self._calculate_predictions(technical_data, sentiment_data)
+            predictions = await self._generate_predictions(technical_analysis, sentiment_data)
             
-            self._set_progress(PROGRESS_COMPLETE, 100, 0)
+            self._update_progress("complete")
             
             return {
-                "sp500_prediction": predictions.get("sp500", {}),
-                "ftse_prediction": predictions.get("ftse", {}),
+                "predictions": predictions,
+                "technical_analysis": technical_analysis,
+                "sentiment_data": sentiment_data,
                 "last_update": datetime.now().isoformat(),
-                "progress_state": self._progress_state,
-                "progress_percentage": self._progress_percentage,
-                "eta": self._eta.isoformat() if self._eta else None,
+                "api_calls_remaining": {
+                    "alpha_vantage": ALPHA_VANTAGE_DAILY_LIMIT - self._alpha_vantage_calls_today,
+                    "fmp": FMP_DAILY_LIMIT - self._fmp_calls_today if self.fmp_api_key else 0,
+                },
+                "progress": {
+                    "stage": PROGRESS_STAGES[self._current_stage]["stage"],
+                    "progress": self._current_progress,
+                    "eta": self._eta.isoformat() if self._eta else None,
+                }
             }
             
-        except Exception as exc:
-            self._set_progress(PROGRESS_ERROR, 0, 0)
-            _LOGGER.exception("Error updating market prediction data")
-            raise UpdateFailed(f"Error communicating with API: {exc}") from exc
+        except Exception as err:
+            _LOGGER.error(f"Error updating market prediction data: {err}")
+            self._update_progress("complete")  # Reset progress on error
+            if "Invalid API call" in str(err) or "API key" in str(err):
+                raise ConfigEntryAuthFailed(f"API authentication failed: {err}") from err
+            raise UpdateFailed(f"Error communicating with API: {err}") from err
 
     async def _fetch_market_data(self) -> dict[str, Any]:
         """Fetch market data from Alpha Vantage."""
-        symbols = ["SPY", "VTI"]  # S&P 500 and FTSE 100 proxies
         market_data = {}
         
-        async with aiohttp.ClientSession() as session:
-            for symbol in symbols:
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT)
+        ) as session:
+            for market_name, symbol in SUPPORTED_SYMBOLS.items():
                 try:
-                    # Get daily data
-                    daily_url = f"{ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={self._alpha_vantage_key}"
-                    
-                    async with async_timeout.timeout(30):
-                        async with session.get(daily_url) as response:
-                            daily_data = await response.json()
-                    
-                    # Get RSI
-                    rsi_url = f"{ALPHA_VANTAGE_BASE_URL}?function=RSI&symbol={symbol}&interval=daily&time_period=14&series_type=close&apikey={self._alpha_vantage_key}"
-                    
-                    async with async_timeout.timeout(30):
-                        async with session.get(rsi_url) as response:
-                            rsi_data = await response.json()
-                    
-                    market_data[symbol] = {
-                        "daily": daily_data,
-                        "rsi": rsi_data
-                    }
-                    
-                    # Add delay to respect API limits
-                    await asyncio.sleep(1)
-                    
-                except Exception as exc:
-                    _LOGGER.error(f"Error fetching data for {symbol}: {exc}")
-                    raise
+                    async with self._av_throttler:
+                        url = (
+                            f"{ALPHA_VANTAGE_BASE_URL}?"
+                            f"function=GLOBAL_QUOTE&symbol={symbol}&apikey={self.alpha_vantage_api_key}"
+                        )
+                        
+                        async with session.get(url) as response:
+                            if response.status != 200:
+                                raise UpdateFailed(f"Alpha Vantage API returned status {response.status}")
+                            
+                            data = await response.json()
+                            self._alpha_vantage_calls_today += 1
+                            
+                            if "Error Message" in data:
+                                raise UpdateFailed(f"Alpha Vantage error: {data['Error Message']}")
+                            
+                            if "Note" in data:
+                                raise UpdateFailed("Alpha Vantage API rate limit exceeded")
+                            
+                            if "Global Quote" not in data:
+                                raise UpdateFailed(f"Invalid Alpha Vantage response for {symbol}")
+                            
+                            quote_data = data["Global Quote"]
+                            market_data[market_name] = {
+                                "symbol": quote_data.get("01. symbol"),
+                                "price": float(quote_data.get("05. price", 0)),
+                                "change": float(quote_data.get("09. change", 0)),
+                                "change_percent": quote_data.get("10. change percent", "0%").replace("%", ""),
+                                "volume": int(quote_data.get("06. volume", 0)),
+                                "previous_close": float(quote_data.get("08. previous close", 0)),
+                            }
+                            
+                except (asyncio.TimeoutError, aiohttp.ClientError) as err:
+                    _LOGGER.error(f"Error fetching data for {market_name}: {err}")
+                    raise UpdateFailed(f"Network error fetching {market_name} data") from err
+                
+                # Small delay between requests
+                await asyncio.sleep(0.5)
         
         return market_data
 
-    async def _process_technical_indicators(self, market_data: dict) -> dict[str, Any]:
-        """Process technical indicators."""
+    async def _fetch_sentiment_data(self) -> dict[str, Any]:
+        """Fetch sentiment data from Financial Modeling Prep (optional)."""
+        if not self.fmp_api_key:
+            return {}
+        
+        sentiment_data = {}
+        
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT)
+        ) as session:
+            try:
+                async with self._fmp_throttler:
+                    url = f"{FMP_BASE_URL}/stock_news?tickers=SPY&limit=10&apikey={self.fmp_api_key}"
+                    
+                    async with session.get(url) as response:
+                        if response.status != 200:
+                            _LOGGER.warning(f"FMP API returned status {response.status}")
+                            return {}
+                        
+                        data = await response.json()
+                        self._fmp_calls_today += 1
+                        
+                        if isinstance(data, dict) and "Error Message" in data:
+                            _LOGGER.warning(f"FMP API error: {data['Error Message']}")
+                            return {}
+                        
+                        # Basic sentiment analysis
+                        positive_words = ["good", "great", "positive", "up", "rise", "gain", "bull", "strong"]
+                        negative_words = ["bad", "down", "fall", "drop", "bear", "weak", "decline", "loss"]
+                        
+                        sentiment_score = 0
+                        news_count = 0
+                        
+                        for article in data[:10]:  # Process up to 10 articles
+                            title = article.get("title", "").lower()
+                            content = article.get("text", "").lower()
+                            combined_text = f"{title} {content}"
+                            
+                            positive_count = sum(1 for word in positive_words if word in combined_text)
+                            negative_count = sum(1 for word in negative_words if word in combined_text)
+                            
+                            if positive_count > negative_count:
+                                sentiment_score += 1
+                            elif negative_count > positive_count:
+                                sentiment_score -= 1
+                            
+                            news_count += 1
+                        
+                        if news_count > 0:
+                            sentiment_data = {
+                                "sentiment_score": sentiment_score / news_count,
+                                "news_processed": news_count,
+                                "sentiment_direction": "positive" if sentiment_score > 0 else "negative" if sentiment_score < 0 else "neutral",
+                            }
+                        
+            except (asyncio.TimeoutError, aiohttp.ClientError) as err:
+                _LOGGER.warning(f"Error fetching sentiment data: {err}")
+                return {}
+        
+        return sentiment_data
+
+    async def _process_technical_analysis(self, market_data: dict[str, Any]) -> dict[str, Any]:
+        """Process technical analysis indicators."""
         technical_data = {}
         
-        for symbol, data in market_data.items():
-            try:
-                # Process daily prices
-                daily_series = data.get("daily", {}).get("Time Series (Daily)", {})
-                if not daily_series:
-                    continue
-                
-                # Get latest prices
-                dates = sorted(daily_series.keys(), reverse=True)[:20]
-                prices = [float(daily_series[date]["4. close"]) for date in dates]
-                volumes = [float(daily_series[date]["5. volume"]) for date in dates]
-                
-                # Calculate technical indicators
-                rsi_series = data.get("rsi", {}).get("Technical Analysis: RSI", {})
-                latest_rsi_date = max(rsi_series.keys()) if rsi_series else None
-                latest_rsi = float(rsi_series[latest_rsi_date]["RSI"]) if latest_rsi_date else 50
-                
-                # Calculate moving averages
-                ma_5 = sum(prices[:5]) / 5 if len(prices) >= 5 else prices[0]
-                ma_10 = sum(prices[:10]) / 10 if len(prices) >= 10 else prices[0]
-                
-                # Calculate momentum
-                momentum = (prices[0] - prices[4]) / prices[4] * 100 if len(prices) >= 5 else 0
-                
-                # Calculate volatility
-                returns = [(prices[i] - prices[i+1]) / prices[i+1] for i in range(len(prices)-1)]
-                volatility = (sum(r**2 for r in returns) / len(returns)) ** 0.5 if returns else 0
-                
-                technical_data[symbol] = {
-                    "current_price": prices[0],
-                    "rsi": latest_rsi,
-                    "ma_5": ma_5,
-                    "ma_10": ma_10,
-                    "momentum": momentum,
-                    "volatility": volatility,
-                    "volume_avg": sum(volumes[:5]) / 5 if len(volumes) >= 5 else volumes[0],
-                }
-                
-            except Exception as exc:
-                _LOGGER.error(f"Error processing technical data for {symbol}: {exc}")
-                
+        for market_name, data in market_data.items():
+            price = data["price"]
+            change_percent = float(data["change_percent"])
+            
+            # Simple technical indicators
+            rsi_signal = 0
+            if abs(change_percent) > 2:
+                rsi_signal = -1 if change_percent < -2 else 1
+            
+            momentum_signal = 1 if change_percent > 0 else -1 if change_percent < 0 else 0
+            
+            # Combine signals
+            technical_score = (rsi_signal * 0.4) + (momentum_signal * 0.6)
+            
+            technical_data[market_name] = {
+                "rsi_signal": rsi_signal,
+                "momentum_signal": momentum_signal,
+                "technical_score": technical_score,
+                "volatility": abs(change_percent),
+            }
+        
         return technical_data
 
-    async def _fetch_sentiment_data(self) -> dict[str, Any]:
-        """Fetch sentiment data from FMP."""
-        if not self._fmp_key:
-            return {}
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                url = f"{FMP_BASE_URL}/v3/stock_news?tickers=SPY,VTI&limit=50&apikey={self._fmp_key}"
-                
-                async with async_timeout.timeout(30):
-                    async with session.get(url) as response:
-                        news_data = await response.json()
-                
-                # Simple sentiment analysis
-                positive_words = ["up", "gain", "rise", "bull", "positive", "growth", "strong"]
-                negative_words = ["down", "fall", "bear", "negative", "decline", "weak", "loss"]
-                
-                sentiment_scores = []
-                for article in news_data[:20]:  # Analyze recent 20 articles
-                    title = article.get("title", "").lower()
-                    text = article.get("text", "").lower()
-                    content = f"{title} {text}"
-                    
-                    positive_count = sum(1 for word in positive_words if word in content)
-                    negative_count = sum(1 for word in negative_words if word in content)
-                    
-                    if positive_count + negative_count > 0:
-                        score = (positive_count - negative_count) / (positive_count + negative_count)
-                    else:
-                        score = 0
-                    
-                    sentiment_scores.append(score)
-                
-                avg_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0
-                
-                return {
-                    "overall_sentiment": avg_sentiment,
-                    "news_count": len(news_data),
-                    "analyzed_articles": len(sentiment_scores)
-                }
-                
-        except Exception as exc:
-            _LOGGER.error(f"Error fetching sentiment data: {exc}")
-            return {}
-
-    async def _calculate_predictions(self, technical_data: dict, sentiment_data: dict) -> dict[str, Any]:
-        """Calculate market predictions."""
+    async def _generate_predictions(
+        self, technical_analysis: dict[str, Any], sentiment_data: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Generate market predictions based on analysis."""
         predictions = {}
         
-        symbol_map = {
-            "SPY": "sp500",
-            "VTI": "ftse"
-        }
+        sentiment_weight = 0.25 if sentiment_data else 0
+        technical_weight = 1.0 - sentiment_weight
         
-        for symbol, data in technical_data.items():
-            try:
-                # Technical analysis score (75% weight)
-                tech_score = 0
-                
-                # RSI analysis (25% of technical)
-                rsi = data.get("rsi", 50)
-                if rsi < 30:
-                    tech_score += 0.25  # Oversold, expect recovery
-                elif rsi > 70:
-                    tech_score -= 0.25  # Overbought, expect decline
-                
-                # Moving average analysis (25% of technical)
-                current_price = data.get("current_price", 0)
-                ma_5 = data.get("ma_5", 0)
-                ma_10 = data.get("ma_10", 0)
-                
-                if current_price > ma_5 > ma_10:
-                    tech_score += 0.25  # Uptrend
-                elif current_price < ma_5 < ma_10:
-                    tech_score -= 0.25  # Downtrend
-                
-                # Momentum analysis (15% of technical)
-                momentum = data.get("momentum", 0)
-                tech_score += momentum * 0.0015  # Scale momentum
-                
-                # Volatility adjustment (10% of technical)
-                volatility = data.get("volatility", 0)
-                if volatility < 0.02:
-                    tech_score += 0.1  # Low volatility = stable growth
-                elif volatility > 0.05:
-                    tech_score -= 0.1  # High volatility = uncertainty
-                
-                # Sentiment analysis score (25% weight)
-                sentiment_score = 0
-                if sentiment_data:
-                    overall_sentiment = sentiment_data.get("overall_sentiment", 0)
-                    sentiment_score = overall_sentiment * 0.25
-                
-                # Combine scores
-                final_score = (tech_score * 0.75) + (sentiment_score * 0.25)
-                
-                # Convert to percentage and cap at ±4%
-                prediction_pct = min(max(final_score * 100, -MAX_PREDICTION_CHANGE), MAX_PREDICTION_CHANGE)
-                
-                # Calculate confidence based on signal strength
-                confidence = min(abs(final_score) * 200, 100)  # 0-100%
-                
-                # Determine direction
-                direction = "UP" if prediction_pct > 0 else "DOWN" if prediction_pct < 0 else "FLAT"
-                
-                # Generate explanation
-                explanation_parts = []
-                if rsi < 30:
-                    explanation_parts.append("oversold conditions (RSI)")
-                elif rsi > 70:
-                    explanation_parts.append("overbought conditions (RSI)")
-                
-                if current_price > ma_5 > ma_10:
-                    explanation_parts.append("bullish moving average trend")
-                elif current_price < ma_5 < ma_10:
-                    explanation_parts.append("bearish moving average trend")
-                
-                if momentum > 1:
-                    explanation_parts.append("positive momentum")
-                elif momentum < -1:
-                    explanation_parts.append("negative momentum")
-                
-                if sentiment_data and abs(overall_sentiment) > 0.1:
-                    sentiment_desc = "positive" if overall_sentiment > 0 else "negative"
-                    explanation_parts.append(f"{sentiment_desc} news sentiment")
-                
-                explanation = f"Prediction based on: {', '.join(explanation_parts) if explanation_parts else 'mixed technical signals'}"
-                
-                prediction_key = symbol_map.get(symbol, symbol.lower())
-                predictions[prediction_key] = {
-                    "direction": direction,
-                    "percentage": round(abs(prediction_pct), 2),
-                    "confidence": round(confidence, 1),
-                    "explanation": explanation,
-                    "technical_score": round(tech_score, 3),
-                    "sentiment_score": round(sentiment_score, 3),
-                    "final_score": round(final_score, 3),
-                }
-                
-            except Exception as exc:
-                _LOGGER.error(f"Error calculating prediction for {symbol}: {exc}")
-                
+        for market_name in SUPPORTED_SYMBOLS:
+            if market_name not in technical_analysis:
+                continue
+            
+            technical_score = technical_analysis[market_name]["technical_score"]
+            sentiment_score = sentiment_data.get("sentiment_score", 0) if sentiment_data else 0
+            
+            # Combine scores
+            combined_score = (technical_score * technical_weight) + (sentiment_score * sentiment_weight)
+            
+            # Determine direction and confidence
+            if combined_score > 0.3:
+                direction = "UP"
+                confidence = min(abs(combined_score) * 100, 95)
+            elif combined_score < -0.3:
+                direction = "DOWN"
+                confidence = min(abs(combined_score) * 100, 95)
+            else:
+                direction = "NEUTRAL"
+                confidence = 50
+            
+            # Calculate percentage prediction (capped at ±4%)
+            percentage = min(max(combined_score * 2.5, -4.0), 4.0)
+            
+            # Generate explanation
+            explanation_parts = []
+            if technical_analysis[market_name]["technical_score"] != 0:
+                explanation_parts.append("Technical indicators suggest market momentum")
+            if sentiment_data and sentiment_score != 0:
+                explanation_parts.append(f"News sentiment is {sentiment_data['sentiment_direction']}")
+            
+            explanation = ". ".join(explanation_parts) if explanation_parts else "Based on current market conditions"
+            
+            predictions[market_name] = {
+                "direction": direction,
+                "percentage": round(percentage, 1),
+                "confidence": round(confidence),
+                "explanation": explanation,
+                "combined_score": round(combined_score, 3),
+            }
+        
         return predictions
+
+    @property
+    def progress_data(self) -> dict[str, Any]:
+        """Return current progress information."""
+        return {
+            "stage": PROGRESS_STAGES[self._current_stage]["stage"],
+            "progress": self._current_progress,
+            "eta": self._eta.isoformat() if self._eta else None,
+        }

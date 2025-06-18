@@ -17,10 +17,9 @@ from .const import (
     DOMAIN,
     CONF_ALPHA_VANTAGE_API_KEY,
     CONF_FMP_API_KEY,
-    CONF_UPDATE_INTERVAL,
-    DEFAULT_UPDATE_INTERVAL,
     ALPHA_VANTAGE_BASE_URL,
     FMP_BASE_URL,
+    DEFAULT_TIMEOUT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,58 +27,47 @@ _LOGGER = logging.getLogger(__name__)
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_ALPHA_VANTAGE_API_KEY): str,
-        vol.Optional(CONF_FMP_API_KEY, default=""): str,
-        vol.Optional(CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL): vol.All(
-            vol.Coerce(int), vol.Range(min=15, max=120)
-        ),
+        vol.Optional(CONF_FMP_API_KEY): str,
     }
 )
 
 
-async def validate_alpha_vantage_key(hass: HomeAssistant, api_key: str) -> dict[str, Any]:
-    """Validate the Alpha Vantage API key."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            url = f"{ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=SPY&apikey={api_key}"
-            async with session.get(url, timeout=10) as response:
-                data = await response.json()
-                
-                if "Error Message" in data:
-                    raise InvalidAuth("Invalid API key")
-                
-                if "Note" in data and "premium" in data["Note"].lower():
-                    raise InvalidAuth("API key rate limit exceeded")
-                
-                return {"title": "Alpha Vantage API"}
-                
-    except asyncio.TimeoutError:
-        raise CannotConnect("Timeout connecting to Alpha Vantage")
-    except Exception as exc:
-        _LOGGER.exception("Unexpected exception")
-        raise CannotConnect("Unknown error occurred") from exc
-
-
-async def validate_fmp_key(hass: HomeAssistant, api_key: str) -> dict[str, Any]:
-    """Validate the FMP API key."""
-    if not api_key:
-        return {"title": "FMP API (Optional)"}
-    
-    try:
-        async with aiohttp.ClientSession() as session:
-            url = f"{FMP_BASE_URL}/v3/quote/SPY?apikey={api_key}"
-            async with session.get(url, timeout=10) as response:
-                data = await response.json()
-                
-                if isinstance(data, dict) and "Error Message" in data:
-                    raise InvalidAuth("Invalid FMP API key")
-                
-                return {"title": "FMP API"}
-                
-    except asyncio.TimeoutError:
-        raise CannotConnect("Timeout connecting to FMP")
-    except Exception as exc:
-        _LOGGER.exception("Unexpected exception validating FMP key")
-        raise CannotConnect("Unknown error occurred") from exc
+async def validate_api_key(hass: HomeAssistant, api_key: str, api_type: str) -> dict[str, Any]:
+    """Validate the API key."""
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT)) as session:
+        try:
+            if api_type == "alpha_vantage":
+                url = f"{ALPHA_VANTAGE_BASE_URL}?function=GLOBAL_QUOTE&symbol=SPY&apikey={api_key}"
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "Error Message" in data:
+                            raise InvalidAuth(f"Alpha Vantage API error: {data['Error Message']}")
+                        if "Note" in data and "API call frequency" in data["Note"]:
+                            raise InvalidAuth("Alpha Vantage API rate limit exceeded")
+                        if "Global Quote" not in data:
+                            raise InvalidAuth("Invalid Alpha Vantage API response format")
+                        return {"api_valid": True, "api_type": "alpha_vantage"}
+                    else:
+                        raise CannotConnect(f"Alpha Vantage API returned status {response.status}")
+            
+            elif api_type == "fmp":
+                url = f"{FMP_BASE_URL}/quote/SPY?apikey={api_key}"
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if isinstance(data, dict) and "Error Message" in data:
+                            raise InvalidAuth(f"FMP API error: {data['Error Message']}")
+                        if not isinstance(data, list) or len(data) == 0:
+                            raise InvalidAuth("Invalid FMP API response format")
+                        return {"api_valid": True, "api_type": "fmp"}
+                    else:
+                        raise CannotConnect(f"FMP API returned status {response.status}")
+                        
+        except asyncio.TimeoutError as err:
+            raise CannotConnect(f"Timeout connecting to {api_type} API") from err
+        except aiohttp.ClientError as err:
+            raise CannotConnect(f"Cannot connect to {api_type} API: {err}") from err
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -92,22 +80,31 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
-        
+
         if user_input is not None:
             try:
-                # Validate Alpha Vantage API key
-                await validate_alpha_vantage_key(
-                    self.hass, user_input[CONF_ALPHA_VANTAGE_API_KEY]
+                # Validate Alpha Vantage API key (required)
+                await validate_api_key(
+                    self.hass, 
+                    user_input[CONF_ALPHA_VANTAGE_API_KEY], 
+                    "alpha_vantage"
                 )
                 
-                # Validate FMP API key if provided
+                # Validate FMP API key if provided (optional)
                 if user_input.get(CONF_FMP_API_KEY):
-                    await validate_fmp_key(
-                        self.hass, user_input[CONF_FMP_API_KEY]
+                    await validate_api_key(
+                        self.hass, 
+                        user_input[CONF_FMP_API_KEY], 
+                        "fmp"
                     )
-                
+
+                # Check for existing entries
+                await self.async_set_unique_id("market_prediction_instance")
+                self._abort_if_unique_id_configured()
+
                 return self.async_create_entry(
-                    title="Market Prediction System", data=user_input
+                    title="Market Prediction System",
+                    data=user_input,
                 )
                 
             except CannotConnect:
@@ -123,8 +120,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=STEP_USER_DATA_SCHEMA,
             errors=errors,
             description_placeholders={
-                "alpha_vantage_url": "https://www.alphavantage.co/support/#api-key",
-                "fmp_url": "https://financialmodelingprep.com/developer/docs",
+                "alpha_vantage_note": "Get your free API key from https://www.alphavantage.co/support/#api-key",
+                "fmp_note": "Optional: Get your free API key from https://financialmodelingprep.com/developer/docs"
             },
         )
 
