@@ -5,7 +5,11 @@
 [![Validate](https://github.com/BestMasterChief/ha-market-prediction/workflows/Validate/badge.svg)](https://github.com/BestMasterChief/ha-market-prediction/actions)
 
 A Renaissance Technologies-inspired market prediction system for Home Assistant that provides intelligent forecasts for S&P 500 and FTSE 100 indices.
-
+<p align="center">
+  <a href="https://www.buymeacoffee.com/bestmasterchief" target="_blank">
+    <img src="https://img.shields.io/badge/Buy&nbsp;me&nbsp;a&nbsp;coffee-Support&nbsp;Dev-yellow?style=for-the-badge&logo=buy-me-a-coffee" alt="Buy Me A Coffee">
+  </a>
+</p>
 ## ✨ Features
 
 - 🎯 **Renaissance Technologies-Inspired Algorithm**: Multi-factor quantitative analysis combining technical indicators and sentiment analysis
