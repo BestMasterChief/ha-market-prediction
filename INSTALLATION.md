@@ -1,114 +1,29 @@
-# Installation Guide - Market Prediction System
+# Complete Installation and GitHub Setup Guide
 
-This guide provides detailed installation instructions for the Market Prediction System integration for Home Assistant.
+## GitHub Repository Setup Instructions
 
-## 🔧 Prerequisites
+### Step 1: Fix Repository Default Branch
 
-Before starting, ensure you have:
+⚠️ **CRITICAL**: Your repository's default branch "ha-market-prediction" must be changed to "main" for HACS compatibility.
 
-- Home Assistant 2024.1.0 or newer
-- HACS installed and configured
-- Internet connection for API access
-- API keys (see section below)
+1. **Change Default Branch**:
+   - Go to your repository: https://github.com/BestMasterChief/ha-market-prediction
+   - Click Settings → Branches
+   - Under "Default branch", click the edit icon
+   - Change from "ha-market-prediction" to "main"
+   - Confirm the change
 
-## 🗝️ API Key Requirements
+2. **Update Local Repository** (if you have local files):
+   ```bash
+   git branch -m ha-market-prediction main
+   git push origin main
+   git push origin --delete ha-market-prediction
+   ```
 
-### Alpha Vantage (Required)
-- **Free Tier**: 500 API calls per day
-- **Sign Up**: https://www.alphavantage.co/support/#api-key
-- **Cost**: Free
-- **Usage**: Market data and technical analysis
+### Step 2: Create Proper Directory Structure
 
-### Financial Modeling Prep (Optional)
-- **Free Tier**: 250 total API calls (lifetime)
-- **Sign Up**: https://financialmodelingprep.com/developer/docs
-- **Cost**: Free (limited) or paid plans available
-- **Usage**: News sentiment analysis
+Create this exact folder structure in your repository:
 
-**Note**: The integration works with just the Alpha Vantage API key. FMP is optional for enhanced sentiment analysis.
-
-## 📦 Installation Methods
-
-### Method A: HACS Installation (Recommended)
-
-#### Step 1: Add Custom Repository
-1. Open Home Assistant
-2. Navigate to **HACS** → **Integrations**
-3. Click the **three dots (⋮)** in the top right corner
-4. Select **"Custom repositories"**
-5. Add the following details:
-   - **Repository**: `https://github.com/BestMasterChief/ha-market-prediction`
-   - **Category**: `Integration`
-6. Click **"ADD"**
-
-#### Step 2: Install Integration
-1. In HACS, search for **"Market Prediction System"**
-2. Click on the integration
-3. Click **"Download"**
-4. Wait for download to complete
-5. **Restart Home Assistant**
-
-#### Step 3: Configure Integration
-1. Go to **Settings** → **Devices & Services**
-2. Click **"Add Integration"** (+ button)
-3. Search for **"Market Prediction System"**
-4. Enter your API keys:
-   - **Alpha Vantage API Key**: [Your key] (Required)
-   - **FMP API Key**: [Your key] (Optional)
-5. Click **"Submit"**
-
-### Method B: Manual Installation
-
-#### Step 1: Download Files
-1. Download the latest release from: https://github.com/BestMasterChief/ha-market-prediction/releases
-2. Extract the ZIP file
-3. Copy the `custom_components/market_prediction/` folder to your Home Assistant `custom_components` directory
-
-**Expected Directory Structure:**
-```
-/config/
-├── custom_components/
-│   └── market_prediction/
-│       ├── __init__.py
-│       ├── manifest.json
-│       ├── const.py
-│       ├── config_flow.py
-│       ├── coordinator.py
-│       └── sensor.py
-```
-
-#### Step 2: Restart Home Assistant
-1. Restart Home Assistant completely
-2. Wait for restart to complete
-
-#### Step 3: Add Integration
-1. Go to **Settings** → **Devices & Services**
-2. Click **"Add Integration"** (+ button)
-3. Search for **"Market Prediction System"**
-4. Configure with your API keys
-
-## 🌐 GitHub Repository Setup (For Contributors)
-
-### Critical Branch Configuration
-
-**⚠️ Important**: HACS requires the default branch to be named `main` or `master`, not `ha-market-prediction`.
-
-#### Fix Branch Name Issue:
-```bash
-# If your current default branch is "ha-market-prediction"
-git checkout ha-market-prediction
-git branch -m ha-market-prediction main
-git push -u origin main
-
-# Update GitHub default branch
-# Go to GitHub → Settings → Branches → Change default branch to "main"
-
-# Update local references
-git branch --unset-upstream
-git push --set-upstream origin main
-```
-
-### Repository File Structure
 ```
 ha-market-prediction/
 ├── custom_components/
@@ -123,145 +38,284 @@ ha-market-prediction/
 │   └── workflows/
 │       └── validate.yaml
 ├── README.md
-├── INSTALLATION.md
 ├── hacs.json
-└── LICENSE
+└── INSTALLATION.md
 ```
 
-## ✅ Verification Steps
+### Step 3: Upload All Files
 
-### 1. Check Integration Status
-- Go to **Settings** → **Devices & Services**
-- Look for **"Market Prediction System"**
-- Status should show **"✓ Configured"**
+Upload these files to your GitHub repository in the correct locations:
 
-### 2. Verify Sensors
-Navigate to **Developer Tools** → **States** and check for:
-- `sensor.s_p_500_prediction`
-- `sensor.ftse_100_prediction`
-- `sensor.market_prediction_progress`
-- `sensor.market_prediction_status`
+1. **Root Directory Files**:
+   - `README.md` (main documentation)
+   - `hacs.json` (HACS configuration)
+   - `INSTALLATION.md` (this file)
 
-### 3. Test Progress Tracking
-1. Go to **Developer Tools** → **Services**
-2. Call service: `homeassistant.update_entity`
-3. Target: `sensor.market_prediction_progress`
-4. Watch the progress sensor update through stages
+2. **custom_components/market_prediction/ Files**:
+   - `__init__.py` (integration entry point)
+   - `manifest.json` (integration metadata)
+   - `const.py` (constants and configuration)
+   - `config_flow.py` (UI configuration)
+   - `coordinator.py` (main processing logic)
+   - `sensor.py` (sensor entities)
 
-### 4. Check Logs
-- Go to **Settings** → **System** → **Logs**
-- Look for any errors related to `market_prediction`
-- Normal operation should show minimal warnings
+3. **GitHub Actions File** (optional but recommended):
+   ```yaml
+   # .github/workflows/validate.yaml
+   name: Validate
+   on:
+     push:
+     pull_request:
+   jobs:
+     validate:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v3
+         - name: HACS Validation
+           uses: hacs/action@main
+           with:
+             category: integration
+   ```
 
-## 🚨 Troubleshooting
+### Step 4: Create GitHub Release
 
-### Common Issues and Solutions
+1. **Go to Releases**:
+   - Navigate to https://github.com/BestMasterChief/ha-market-prediction/releases
+   - Click "Create a new release"
 
-#### "Integration not found"
-**Cause**: Files not properly placed or Home Assistant not restarted.
+2. **Release Configuration**:
+   - **Tag version**: `v2.2.0`
+   - **Release title**: `Market Prediction System v2.2.0 - Enhanced Sentiment Analysis`
+   - **Description**:
+     ```markdown
+     ## Enhanced Multi-Source Sentiment Analysis
+     
+     ### 🎯 Fixes
+     - ✅ Sentiment analysis now takes 5-10 minutes instead of completing instantly
+     - ✅ Added 10 financial news sources with weighted scoring
+     - ✅ Real-time progress tracking with current source display
+     - ✅ Comprehensive processing time breakdown
+     
+     ### 🚀 New Features
+     - Multi-source sentiment analysis (Alpha Vantage, Marketaux, Finnhub, etc.)
+     - Progress tracking sensors with ETA calculation
+     - Current source display sensor
+     - Processing time monitoring
+     - Renaissance Technologies-inspired 75/25 weighting
+     
+     ### 📊 Sentiment Sources
+     - Alpha Vantage News (weight: 5.0, 20 items)
+     - Bloomberg Market (weight: 4.5, 10 items)
+     - Reuters Financial (weight: 4.5, 12 items)
+     - Marketaux Financial (weight: 4.0, 15 items)
+     - Finnhub Sentiment (weight: 4.0, 18 items)
+     - And 5 more sources for comprehensive coverage
+     
+     ### 🔧 Installation
+     1. Add repository to HACS custom repositories
+     2. Install "Market Prediction System" integration
+     3. Configure with Alpha Vantage API key (required)
+     4. Optionally add FMP API key for enhanced features
+     ```
 
-**Solution**:
-1. Verify file placement in `/config/custom_components/market_prediction/`
-2. Restart Home Assistant completely
-3. Clear browser cache
+3. **Attach Files** (optional):
+   - You can attach a ZIP file of the integration for manual installation
 
-#### "Invalid API key" Error
-**Cause**: Incorrect or expired API keys.
+4. **Publish Release**
 
-**Solution**:
-1. Verify API keys are copied correctly (no extra spaces)
-2. Test API keys manually:
+## HACS Installation for Users
+
+### Method 1: Add as Custom Repository
+
+1. **Open HACS**:
+   - Home Assistant → HACS → Integrations
+
+2. **Add Custom Repository**:
+   - Click three dots menu (⋮) → Custom repositories
+   - Repository: `https://github.com/BestMasterChief/ha-market-prediction`
+   - Category: `Integration`
+   - Click "Add"
+
+3. **Install Integration**:
+   - Search for "Market Prediction System"
+   - Click "Download"
+   - Restart Home Assistant
+
+4. **Configure Integration**:
+   - Settings → Devices & Services
+   - Click "Add Integration"
+   - Search "Market Prediction System"
+   - Enter API keys
+
+### Method 2: Manual Installation
+
+1. **Download Files**:
+   - Download from: https://github.com/BestMasterChief/ha-market-prediction/releases
+   - Extract the ZIP file
+
+2. **Copy Files**:
    ```bash
-   # Test Alpha Vantage
-   curl "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey=YOUR_KEY"
-   
-   # Test FMP (if using)
+   # Copy to Home Assistant config directory
+   cp -r custom_components/market_prediction /config/custom_components/
+   ```
+
+3. **Restart Home Assistant**
+
+4. **Add Integration**: Settings → Devices & Services → Add Integration
+
+## API Keys Setup
+
+### Alpha Vantage (Required)
+
+1. **Get Free API Key**:
+   - Visit: https://www.alphavantage.co/support/#api-key
+   - Fill out the form (name, email, etc.)
+   - Copy your API key
+
+2. **Test API Key**:
+   ```bash
+   curl "https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=SPY&apikey=YOUR_KEY"
+   ```
+
+### Financial Modeling Prep (Optional)
+
+1. **Get Free API Key**:
+   - Visit: https://site.financialmodelingprep.com/developer/docs/
+   - Sign up for free account
+   - Copy API key from dashboard
+
+2. **Test API Key**:
+   ```bash
    curl "https://financialmodelingprep.com/api/v3/quote/SPY?apikey=YOUR_KEY"
    ```
 
-#### "Sensors Unavailable"
-**Cause**: API calls failing or rate limits exceeded.
+## Configuration Methods
 
-**Solution**:
-1. Check API quota usage
-2. Wait for rate limit reset (usually 24 hours)
-3. Enable debug logging:
-   ```yaml
-   logger:
-     default: warning
-     logs:
-       custom_components.market_prediction: debug
-   ```
+### Option 1: Integration UI (Recommended)
 
-#### "Progress jumps to 100%"
-**Cause**: Coordinator error during data fetching.
+1. **Add Integration**:
+   - Settings → Devices & Services
+   - Click "Add Integration"
+   - Search "Market Prediction System"
 
-**Solution**:
-1. Check Home Assistant logs for specific errors
-2. Verify API keys are valid
-3. Check network connectivity
-4. Restart integration:
-   - Settings → Devices & Services → Market Prediction System → ... → Reload
+2. **Enter API Keys**:
+   - Alpha Vantage API Key: `YOUR_ALPHA_VANTAGE_KEY` (required)
+   - FMP API Key: `YOUR_FMP_KEY` (optional)
 
-### Log Analysis
+3. **Complete Setup**:
+   - Integration will validate keys
+   - Creates 6 sensors automatically
 
-#### Enable Detailed Logging
-Add to `configuration.yaml`:
+### Option 2: secrets.yaml (Alternative)
+
+If you prefer file-based configuration:
+
+```yaml
+# secrets.yaml
+alpha_vantage_key: "YOUR_ALPHA_VANTAGE_KEY_HERE"
+fmp_key: "YOUR_FMP_KEY_HERE"
+```
+
+## Sensors Created
+
+The integration creates these sensors:
+
+### Market Predictions
+- `sensor.market_prediction_s_p_500`: S&P 500 forecast
+- `sensor.market_prediction_ftse_100`: FTSE 100 forecast
+
+### Progress Tracking (New in v2.2.0)
+- `sensor.market_prediction_progress`: Analysis progress %
+- `sensor.market_prediction_status`: Current processing stage
+- `sensor.market_prediction_current_source`: Source being processed
+- `sensor.market_prediction_processing_time`: Total processing time
+
+## Expected Behavior
+
+### Normal Analysis Flow (5-10 minutes total)
+
+1. **Initializing** (5%) - 2 seconds
+2. **Fetching Market Data** (25%) - 30-45 seconds
+3. **Processing Technical Analysis** (50%) - 3-5 seconds
+4. **Processing Sentiment Analysis** (75%) - **5-10 minutes** ⏱️
+   - Alpha Vantage News (20 items, ~25 seconds)
+   - Marketaux Financial (15 items, ~30 seconds)
+   - Finnhub Sentiment (18 items, ~20 seconds)
+   - Yahoo Finance (25 items, ~15 seconds)
+   - MarketWatch (15 items, ~18 seconds)
+   - Reuters Financial (12 items, ~22 seconds)
+   - Bloomberg Market (10 items, ~35 seconds)
+   - CNBC Market News (22 items, ~15 seconds)
+   - Financial Times (8 items, ~28 seconds)
+   - Wall Street Journal (15 items, ~20 seconds)
+5. **Calculating Predictions** (90%) - 2-3 seconds
+6. **Complete** (100%) - Done!
+
+### Progress Display
+
+Watch these sensors during analysis:
+- `sensor.market_prediction_status`: Shows current stage
+- `sensor.market_prediction_current_source`: Shows "Bloomberg Market", "Reuters Financial", etc.
+- `sensor.market_prediction_progress`: Shows percentage (0-100%)
+
+## Troubleshooting
+
+### Issue 1: Analysis Too Fast (Fixed)
+- ✅ **Fixed in v2.2.0**: Now takes 5-10 minutes with visible progress
+
+### Issue 2: Sensors Unavailable
+- Check API keys in Settings → Devices & Services
+- Verify internet connection
+- Check Home Assistant logs
+
+### Issue 3: "Duplicate key" errors
+- Ensure you're using the integration, not manual YAML
+- Remove any old configuration from configuration.yaml
+
+### Issue 4: HACS not finding repository
+- Ensure default branch is "main" (not "ha-market-prediction")
+- Check repository is public
+- Verify hacs.json file is in root directory
+
+## Debugging
+
+Enable debug logging:
+
 ```yaml
 logger:
   default: warning
   logs:
     custom_components.market_prediction: debug
-    custom_components.market_prediction.coordinator: debug
 ```
 
-#### Log Locations
-- **Main Logs**: Settings → System → Logs
-- **Integration Logs**: Filter by "market_prediction"
+Check logs at: Settings → System → Logs
 
-### API Quota Management
+## Support
 
-#### Check Remaining Calls
-The status sensor shows remaining API calls:
-- Check attributes of `sensor.market_prediction_status`
-- Look for `alpha_vantage_calls_remaining` and `fmp_calls_remaining`
+- **GitHub Issues**: https://github.com/BestMasterChief/ha-market-prediction/issues
+- **GitHub Discussions**: https://github.com/BestMasterChief/ha-market-prediction/discussions
+- **Home Assistant Community**: Search for "Market Prediction System"
 
-#### Rate Limit Best Practices
-- Alpha Vantage: 5 calls per minute maximum
-- FMP: 4 calls per minute maximum
-- Daily limits reset at midnight UTC
+## Success Verification
 
-## 🔄 Updates and Maintenance
+After installation, you should see:
 
-### HACS Updates
-1. HACS will automatically notify of updates
-2. Click "Update" when available
-3. Restart Home Assistant
+1. **Integration**: Settings → Devices & Services → "Market Prediction System" ✅
+2. **6 Sensors**: Developer Tools → States → search "market_prediction" ✅
+3. **Progress Updates**: Watch `sensor.market_prediction_current_source` change ✅
+4. **5-10 Minute Analysis**: Time the full sentiment analysis phase ✅
 
-### Manual Updates
-1. Download new release from GitHub
-2. Replace files in `custom_components/market_prediction/`
-3. Restart Home Assistant
+## Repository Checklist
 
-### Configuration Changes
-- Most settings can be changed via the integration UI
-- Go to Settings → Devices & Services → Market Prediction System → Configure
+Before publishing, ensure:
 
-## 📞 Support
+- [ ] Default branch is "main" (not "ha-market-prediction")
+- [ ] All files uploaded to correct directories
+- [ ] hacs.json in root directory
+- [ ] manifest.json has correct version (2.2.0)
+- [ ] README.md includes installation instructions
+- [ ] GitHub release created with proper tag
+- [ ] Repository is public
+- [ ] All Python files have proper imports
 
-### Getting Help
-1. **Check Logs**: Always check logs first for specific error messages
-2. **GitHub Issues**: Report bugs at https://github.com/BestMasterChief/ha-market-prediction/issues
-3. **Home Assistant Community**: Post in the custom components section
-
-### Reporting Issues
-When reporting issues, please include:
-- Home Assistant version
-- Integration version
-- Complete error logs
-- Steps to reproduce the problem
-- API provider (Alpha Vantage, FMP, or both)
-
----
-
-**Need more help?** Check the [README.md](README.md) for additional information or open an issue on GitHub.
+Your repository is now ready for HACS distribution! 🎉

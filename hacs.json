@@ -1,7 +1,8 @@
 {
   "name": "Market Prediction System",
-  "hacs": "1.6.0",
-  "domains": ["sensor"],
-  "iot_class": "cloud_polling",
+  "content_in_root": false,
+  "filename": "ha-market-prediction",
+  "country": ["US", "GB", "CA", "AU"],
+  "render_readme": true,
   "homeassistant": "2024.1.0"
 }
