@@ -3,11 +3,11 @@
   "name": "Market Prediction System",
   "codeowners": ["@BestMasterChief"],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": [],
   "documentation": "https://github.com/BestMasterChief/ha-market-prediction",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/BestMasterChief/ha-market-prediction/issues",
-  "requirements": ["requests", "asyncio"],
+  "requirements": ["aiohttp>=3.8.0", "python-dateutil>=2.8.0"],
   "version": "2.2.2"
 }
