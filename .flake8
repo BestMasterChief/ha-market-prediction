@@ -3,7 +3,12 @@ exclude =
     pyscript/,
     __pycache__/,
     .git/,
-    .github/
+    .github/,
+    build/,
+    dist/
 per-file-ignores =
     pyscript/*.py:F821
 max-line-length = 88
+ignore = 
+    W503,  # Line break before binary operator (conflicts with W504)
+    E203   # Whitespace before ':' (conflicts with black formatting)
