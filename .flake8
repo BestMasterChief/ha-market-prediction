@@ -1,15 +1,9 @@
 [flake8]
-max-line-length = 120
-ignore = E501,W503,F821
 exclude = 
-    .git,
-    __pycache__,
     pyscript/,
-    build/,
-    dist/,
-    .github/,
-    .vscode/,
-    .idea/
+    __pycache__/,
+    .git/,
+    .github/
 per-file-ignores =
-    # Ignore undefined name errors in pyscript files
-    pyscript/*.py: F821,F401
+    pyscript/*.py:F821
+max-line-length = 88
