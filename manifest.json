@@ -1,5 +1,5 @@
 {
-  "domain": "market_prediction",
+  "domain": "ha_market_prediction",
   "name": "Market Prediction System",
   "codeowners": ["@bestmasterchief"],
   "config_flow": true,
