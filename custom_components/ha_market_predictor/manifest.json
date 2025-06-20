@@ -1,0 +1,20 @@
+{
+  "domain": "ha_market_predictor",
+  "name": "HA Market Predictor",
+  "documentation": "https://github.com/your-username/ha-market-predictor",
+  "issue_tracker": "https://github.com/your-username/ha-market-predictor/issues",
+  "version": "1.0.0",
+  "codeowners": [
+    "@your-username"
+  ],
+  "requirements": [
+    "requests",
+    "yfinance",
+    "python-dateutil",
+    "pytz"
+  ],
+  "dependencies": [],
+  "config_flow": true,
+  "iot_class": "cloud_polling",
+  "integration_type": "service"
+}
