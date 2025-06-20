@@ -1,6 +1,6 @@
 {
   "name": "Market Prediction System",
-  "content_in_root": false,
+  "content_in_root": true,
   "filename": "ha-market-prediction",
   "country": ["US", "GB", "CA", "AU"],
   "render_readme": true,
