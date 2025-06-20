@@ -1,311 +1,298 @@
-"""Market Prediction Data Update Coordinator."""
+"""Data update coordinator for Market Prediction."""
 import asyncio
-import json
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import aiohttp
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
     DOMAIN,
-    DEFAULT_SCAN_INTERVAL,
-    SENTIMENT_SOURCES,
-    API_TIMEOUT,
     ALPHA_VANTAGE_BASE_URL,
     FMP_BASE_URL,
+    CONF_ALPHA_VANTAGE_API_KEY,
+    CONF_FMP_API_KEY,
+    SENTIMENT_SOURCES,
+    UPDATE_INTERVAL_SECONDS,
+    MAX_PREDICTION_PERCENTAGE,
+    RSI_PERIOD,
+    MA_SHORT_PERIOD,
+    MA_LONG_PERIOD,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class MarketPredictionCoordinator(DataUpdateCoordinator):
-    """Market prediction data coordinator."""
+    """Market prediction data update coordinator."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        config_entry: ConfigEntry,
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, config: Dict[str, Any]) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=DEFAULT_SCAN_INTERVAL,
+            update_interval=timedelta(seconds=UPDATE_INTERVAL_SECONDS),
         )
-        self.config_entry = config_entry
-        self._alpha_vantage_key = config_entry.data.get("alpha_vantage_api_key")
-        self._fmp_key = config_entry.data.get("fmp_api_key")
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._current_stage = "Initializing"
-        self._current_source = ""
-        self._progress_percent = 0
-        self._start_time = None
-        self._eta_seconds = 0
-        self._processing_time = 0.0
-        
-        # Sentiment analysis tracking
-        self._sentiment_sources = SENTIMENT_SOURCES
-        self._sources_processed = 0
-        self._total_sentiment_items = sum(source["items"] for source in self._sentiment_sources)
-
-    @property
-    def current_stage(self) -> str:
-        """Return current processing stage."""
-        return self._current_stage
-
-    @property
-    def current_source(self) -> str:
-        """Return current source being processed."""
-        return self._current_source
-
-    @property
-    def progress_percent(self) -> int:
-        """Return current progress percentage."""
-        return self._progress_percent
-
-    @property
-    def eta_seconds(self) -> int:
-        """Return estimated time remaining in seconds."""
-        return self._eta_seconds
-
-    @property
-    def processing_time(self) -> float:
-        """Return total processing time in seconds."""
-        return self._processing_time
-
-    async def _get_session(self) -> aiohttp.ClientSession:
-        """Get aiohttp session."""
-        if self._session is None:
-            self._session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=API_TIMEOUT)
-            )
-        return self._session
-
-    async def _update_progress(
-        self, 
-        percent: int, 
-        stage: str, 
-        source: str = ""
-    ) -> None:
-        """Update progress information."""
-        self._progress_percent = max(0, min(100, percent))
-        self._current_stage = stage
-        self._current_source = source
-        
-        # Calculate ETA and processing time
-        if self._start_time:
-            elapsed = (datetime.now() - self._start_time).total_seconds()
-            self._processing_time = elapsed
-            
-            if percent > 0 and percent < 100:
-                estimated_total = (elapsed / percent) * 100
-                self._eta_seconds = max(0, int(estimated_total - elapsed))
-        
-        # Trigger coordinator update to refresh sensors
-        self.async_set_updated_data(self.data)
+        self.alpha_vantage_api_key = config[CONF_ALPHA_VANTAGE_API_KEY]
+        self.fmp_api_key = config.get(CONF_FMP_API_KEY)
+        self.sentiment_sources = SENTIMENT_SOURCES
+        self.progress = 0
+        self.status = "Idle"
+        self.current_source = ""
+        self.processing_start_time = None
+        self.eta_seconds = 0
 
     async def _async_update_data(self) -> Dict[str, Any]:
-        """Fetch data from APIs."""
-        if not self._alpha_vantage_key:
-            raise ConfigEntryAuthFailed("Alpha Vantage API key not configured")
-        
-        self._start_time = datetime.now()
-        await self._update_progress(5, "Initializing")
-        
+        """Fetch data from API endpoint."""
         try:
-            # Stage 1: Fetch market data (25%)
-            await self._update_progress(10, "Fetching Market Data", "Alpha Vantage - S&P 500")
-            market_data = await self._fetch_market_data()
-            
-            await self._update_progress(25, "Fetching Market Data", "Alpha Vantage - FTSE 100")
-            await asyncio.sleep(1)  # Rate limiting
-            
-            # Stage 2: Process technical analysis (50%)
-            await self._update_progress(30, "Processing Technical Analysis", "RSI Calculation")
-            technical_data = await self._process_technical_analysis(market_data)
-            
-            await self._update_progress(40, "Processing Technical Analysis", "Moving Averages")
-            await asyncio.sleep(0.5)
-            
-            await self._update_progress(50, "Processing Technical Analysis", "Momentum & Volatility")
-            await asyncio.sleep(0.5)
-            
-            # Stage 3: Enhanced sentiment analysis (75%) - This is the long phase
-            await self._update_progress(52, "Processing Sentiment Analysis", "Initializing sources")
+            self.processing_start_time = datetime.now()
+            await self._update_progress(5, "Initializing", "Setting up analysis")
+
+            # Fetch market data
+            await self._update_progress(10, "Fetching Market Data", "Alpha Vantage API")
+            sp500_data = await self._fetch_market_data("SPX")
+            ftse_data = await self._fetch_market_data("UKX")
+
+            await self._update_progress(25, "Fetching Market Data", "Processing data")
+            await asyncio.sleep(2)
+
+            # Process technical analysis
+            await self._update_progress(30, "Processing Technical Analysis", "RSI calculation")
+            sp500_technical = await self._process_technical_analysis(sp500_data)
+            ftse_technical = await self._process_technical_analysis(ftse_data)
+
+            await self._update_progress(50, "Processing Technical Analysis", "Complete")
+
+            # Process sentiment analysis
             sentiment_data = await self._process_comprehensive_sentiment()
-            
-            # Stage 4: Calculate predictions (90%)
-            await self._update_progress(90, "Calculating Predictions", "Renaissance Algorithm")
-            predictions = await self._calculate_predictions(technical_data, sentiment_data)
-            
-            # Stage 5: Complete (100%)
-            await self._update_progress(100, "Complete")
-            
+
+            await self._update_progress(90, "Calculating Predictions", "Final analysis")
+            sp500_prediction = self._calculate_prediction(sp500_technical, sentiment_data)
+            ftse_prediction = self._calculate_prediction(ftse_technical, sentiment_data)
+
+            await self._update_progress(100, "Complete", "Analysis finished")
+
             return {
-                "market_data": market_data,
-                "technical_data": technical_data,
-                "sentiment_data": sentiment_data,
-                "predictions": predictions,
-                "metadata": {
-                    "last_updated": datetime.now().isoformat(),
-                    "processing_time": self._processing_time,
-                    "sources_processed": len(self._sentiment_sources),
-                    "sentiment_items_processed": self._total_sentiment_items,
-                }
+                "sp500": sp500_prediction,
+                "ftse100": ftse_prediction,
+                "sentiment": sentiment_data,
+                "last_update": datetime.now().isoformat(),
+                "processing_time": (datetime.now() - self.processing_start_time).total_seconds()
             }
-            
+
         except Exception as err:
-            await self._update_progress(0, "Error", str(err))
-            _LOGGER.error("Error updating market prediction data: %s", err)
+            await self._update_progress(0, "Error", f"Analysis failed: {err}")
             raise UpdateFailed(f"Error communicating with API: {err}")
 
-    async def _fetch_market_data(self) -> Dict[str, Any]:
-        """Fetch market data from Alpha Vantage."""
-        session = await self._get_session()
-        
-        # Fetch S&P 500 data
-        sp500_url = f"{ALPHA_VANTAGE_BASE_URL}/query?function=GLOBAL_QUOTE&symbol=SPY&apikey={self._alpha_vantage_key}"
-        
-        try:
-            async with session.get(sp500_url) as response:
-                sp500_data = await response.json()
-                
-            # Fetch FTSE 100 data  
-            ftse_url = f"{ALPHA_VANTAGE_BASE_URL}/query?function=GLOBAL_QUOTE&symbol=^FTSE&apikey={self._alpha_vantage_key}"
-            
-            async with session.get(ftse_url) as response:
-                ftse_data = await response.json()
-                
-            return {
-                "sp500": sp500_data,
-                "ftse": ftse_data,
-                "timestamp": datetime.now().isoformat()
-            }
-            
-        except Exception as err:
-            _LOGGER.error("Error fetching market data: %s", err)
-            raise
+    async def _update_progress(self, progress: int, status: str, current_source: str = "") -> None:
+        """Update progress tracking."""
+        self.progress = progress
+        self.status = status
+        self.current_source = current_source
 
-    async def _process_technical_analysis(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
+        if self.processing_start_time and progress > 0:
+            elapsed = (datetime.now() - self.processing_start_time).total_seconds()
+            if progress < 100:
+                estimated_total = elapsed * (100 / progress)
+                self.eta_seconds = max(0, estimated_total - elapsed)
+            else:
+                self.eta_seconds = 0
+
+        # Update sensor states
+        if self.hass:
+            self.hass.states.async_set(
+                "sensor.market_prediction_progress",
+                progress,
+                {"unit_of_measurement": "%", "friendly_name": "Market Prediction Progress"}
+            )
+            self.hass.states.async_set(
+                "sensor.market_prediction_status",
+                status,
+                {"friendly_name": "Market Prediction Status"}
+            )
+            self.hass.states.async_set(
+                "sensor.market_prediction_current_source",
+                current_source,
+                {"friendly_name": "Current Source"}
+            )
+
+    async def _fetch_market_data(self, symbol: str) -> Dict[str, Any]:
+        """Fetch market data from Alpha Vantage."""
+        url = f"{ALPHA_VANTAGE_BASE_URL}?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={self.alpha_vantage_api_key}"
+        timeout = aiohttp.ClientTimeout(total=30)
+
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "Time Series (Daily)" in data:
+                        return data["Time Series (Daily)"]
+                    elif "Error Message" in data:
+                        raise UpdateFailed(f"API Error: {data['Error Message']}")
+                    elif "Note" in data:
+                        raise UpdateFailed("API rate limit exceeded")
+                else:
+                    raise UpdateFailed(f"HTTP Error: {response.status}")
+
+        return {}
+
+    async def _process_technical_analysis(self, data: Dict[str, Any]) -> Dict[str, float]:
         """Process technical analysis indicators."""
-        # Simulate technical analysis processing
-        await asyncio.sleep(0.5)
-        
+        if not data:
+            return {"rsi": 50, "ma_signal": 0, "momentum": 0, "volatility": 0.02}
+
+        # Convert data to lists for processing
+        dates = sorted(data.keys(), reverse=True)[:30]  # Last 30 days
+        closes = [float(data[date]["4. close"]) for date in dates[:RSI_PERIOD]]
+
+        # Calculate RSI
+        rsi = self._calculate_rsi(closes)
+
+        # Calculate moving averages
+        ma_short = sum(closes[:MA_SHORT_PERIOD]) / MA_SHORT_PERIOD
+        ma_long = sum(closes[:MA_LONG_PERIOD]) / MA_LONG_PERIOD
+        ma_signal = (ma_short - ma_long) / ma_long
+
+        # Calculate momentum
+        momentum = (closes[0] - closes[4]) / closes[4] if len(closes) > 4 else 0
+
+        # Calculate volatility
+        returns = [(closes[i] - closes[i+1]) / closes[i+1] for i in range(len(closes)-1)]
+        volatility = (sum(r**2 for r in returns) / len(returns))**0.5 if returns else 0.02
+
         return {
-            "rsi": {"sp500": 45.2, "ftse": 52.8},
-            "moving_average": {"sp500": 0.15, "ftse": -0.08},
-            "momentum": {"sp500": 0.02, "ftse": -0.01},
-            "volatility": {"sp500": 0.18, "ftse": 0.22},
-            "technical_score": {"sp500": 0.125, "ftse": -0.045}
+            "rsi": rsi,
+            "ma_signal": ma_signal,
+            "momentum": momentum,
+            "volatility": volatility
         }
+
+    def _calculate_rsi(self, prices: list) -> float:
+        """Calculate RSI indicator."""
+        if len(prices) < RSI_PERIOD:
+            return 50.0
+
+        gains = []
+        losses = []
+
+        for i in range(1, len(prices)):
+            diff = prices[i-1] - prices[i]  # Reversed because prices are in descending order
+            if diff > 0:
+                gains.append(diff)
+                losses.append(0)
+            else:
+                gains.append(0)
+                losses.append(abs(diff))
+
+        avg_gain = sum(gains) / len(gains)
+        avg_loss = sum(losses) / len(losses)
+
+        if avg_loss == 0:
+            return 100.0
+
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
 
     async def _process_comprehensive_sentiment(self) -> Dict[str, Any]:
-        """Process comprehensive sentiment analysis from multiple sources."""
+        """Process sentiment analysis with multiple sources."""
         sentiment_results = []
+        total_items = sum(source["items"] for source in self.sentiment_sources)
         processed_items = 0
-        
-        for source_idx, source in enumerate(self._sentiment_sources):
+
+        for source_idx, source in enumerate(self.sentiment_sources):
             source_name = source["name"]
-            source_weight = source["weight"]
-            source_items = source["items"]
-            api_delay = source["api_delay"]
-            
-            _LOGGER.info(f"Processing sentiment source: {source_name}")
-            
-            # Process items from this source
-            for item_idx in range(source_items):
+            # Simulate processing items from this source
+            for item_idx in range(source["items"]):
                 processed_items += 1
-                
-                # Calculate progress (50% to 75% of total)
-                progress = 50 + (processed_items / self._total_sentiment_items) * 25
-                
-                # Update progress with current source info
+                progress = 50 + (processed_items / total_items) * 25
                 await self._update_progress(
-                    int(progress), 
-                    "Processing Sentiment Analysis", 
-                    f"{source_name} (item {item_idx + 1}/{source_items})"
+                    int(progress),
+                    "Processing Sentiment Analysis",
+                    f"{source_name} (item {item_idx+1}/{source['items']})"
                 )
-                
-                # Simulate API delay for realistic processing time
-                await asyncio.sleep(api_delay)
-            
-            # Simulate sentiment score for this source
-            source_sentiment = self._simulate_source_sentiment(source_name)
-            
-            sentiment_results.append({
-                "source": source_name,
-                "weight": source_weight,
-                "sentiment": source_sentiment,
-                "items_processed": source_items,
-                "impact": source_sentiment * source_weight
-            })
-        
-        # Calculate weighted sentiment scores
+                await asyncio.sleep(source["api_delay"])
+
+                # Simulate sentiment score for this item
+                sentiment_score = 0.1 * (source_idx % 3 - 1)  # Varies between -0.1 and 0.1
+                sentiment_results.append({
+                    "source": source_name,
+                    "weight": source["weight"],
+                    "sentiment": sentiment_score
+                })
+
+        # Calculate weighted sentiment
         total_weight = sum(result["weight"] for result in sentiment_results)
-        weighted_sentiment = sum(result["impact"] for result in sentiment_results) / total_weight if total_weight > 0 else 0
-        
+        weighted_sentiment = sum(
+            result["sentiment"] * result["weight"] for result in sentiment_results
+        ) / total_weight if total_weight > 0 else 0
+
         return {
-            "sources": sentiment_results,
-            "weighted_sentiment": weighted_sentiment,
-            "total_sources": len(sentiment_results),
-            "total_items_processed": processed_items,
-            "processing_time": self._processing_time
+            "overall_sentiment": weighted_sentiment,
+            "sentiment_strength": abs(weighted_sentiment),
+            "sentiment_direction": "positive" if weighted_sentiment > 0 else "negative",
+            "sources_processed": len(sentiment_results),
+            "total_weight": total_weight
         }
 
-    def _simulate_source_sentiment(self, source_name: str) -> float:
-        """Simulate sentiment score for a given source."""
-        # Simple hash-based simulation for consistent results
-        source_hash = hash(source_name + str(datetime.now().date())) % 1000
-        return (source_hash / 1000.0 - 0.5) * 2  # Range -1.0 to 1.0
+    def _calculate_prediction(self, technical: Dict[str, float], sentiment: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate final prediction using Renaissance Technologies inspired algorithm."""
+        # Technical analysis (75% weight)
+        technical_score = 0
 
-    async def _calculate_predictions(
-        self, 
-        technical_data: Dict[str, Any], 
-        sentiment_data: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Calculate final predictions using Renaissance Technologies approach."""
-        # Simulate final calculation time
-        await asyncio.sleep(1)
-        
-        # Renaissance approach: 75% technical, 25% sentiment
-        technical_weight = 0.75
-        sentiment_weight = 0.25
-        
-        predictions = {}
-        
-        for market in ["sp500", "ftse"]:
-            technical_score = technical_data["technical_score"].get(market, 0)
-            sentiment_score = sentiment_data["weighted_sentiment"]
-            
-            # Combined score
-            combined_score = (technical_score * technical_weight) + (sentiment_score * sentiment_weight)
-            
-            # Convert to direction and magnitude (capped at ±4%)
-            magnitude = min(abs(combined_score) * 3.5, 4.0)
-            direction = "UP" if combined_score > 0 else "DOWN"
-            
-            # Confidence based on signal strength
-            confidence = min(abs(combined_score) * 100, 95.0)
-            
-            predictions[market] = {
-                "direction": direction,
-                "magnitude": round(magnitude, 2),
-                "confidence": round(confidence, 1),
-                "technical_score": technical_score,
-                "sentiment_score": sentiment_score,
-                "combined_score": combined_score
-            }
-        
-        return predictions
+        # RSI component (25% of total)
+        rsi = technical["rsi"]
+        if rsi < 30:
+            technical_score += 0.25  # Oversold, expect bounce
+        elif rsi > 70:
+            technical_score -= 0.25  # Overbought, expect decline
 
-    async def async_shutdown(self) -> None:
-        """Close the aiohttp session."""
-        if self._session:
-            await self._session.close()
-            self._session = None
+        # Moving average component (25% of total)
+        ma_signal = technical["ma_signal"]
+        technical_score += ma_signal * 0.25
+
+        # Momentum component (15% of total)
+        momentum = technical["momentum"]
+        technical_score += momentum * 0.15
+
+        # Volatility adjustment (10% of total)
+        volatility = technical["volatility"]
+        volatility_factor = min(volatility * 2, 0.1)  # Cap at 10%
+        if technical_score > 0:
+            technical_score += volatility_factor
+        else:
+            technical_score -= volatility_factor
+
+        # Sentiment analysis (25% weight)
+        sentiment_score = sentiment["overall_sentiment"] * 0.25
+
+        # Combine scores
+        total_score = technical_score + sentiment_score
+
+        # Convert to percentage and apply limits
+        prediction_pct = total_score * 100
+        prediction_pct = max(-MAX_PREDICTION_PERCENTAGE, min(MAX_PREDICTION_PERCENTAGE, prediction_pct))
+
+        # Calculate confidence based on signal strength
+        confidence = min(
+            abs(technical_score) + sentiment["sentiment_strength"],
+            1.0
+        )
+
+        direction = "UP" if prediction_pct > 0 else "DOWN"
+        state_value = f"{direction} {abs(prediction_pct):.1f}%"
+
+        return {
+            "state": state_value,
+            "direction": direction,
+            "percentage": abs(prediction_pct),
+            "confidence": confidence * 100,
+            "technical_score": technical_score,
+            "sentiment_score": sentiment_score,
+            "total_score": total_score,
+            "technical_details": technical,
+            "last_update": datetime.now().isoformat()
+        }

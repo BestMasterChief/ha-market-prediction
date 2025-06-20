@@ -1,14 +1,13 @@
 {
   "domain": "market_prediction",
   "name": "Market Prediction System",
-  "codeowners": ["@bestmasterchief"],
+  "codeowners": ["@BestMasterChief"],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["http"],
   "documentation": "https://github.com/BestMasterChief/ha-market-prediction",
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/BestMasterChief/ha-market-prediction/issues",
-  "requirements": ["aiohttp>=3.8.0"],
-  "version": "2.2.1",
-  "loggers": ["custom_components.market_prediction"]
+  "requirements": ["requests", "asyncio"],
+  "version": "2.2.2"
 }

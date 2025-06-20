@@ -1,14 +1,23 @@
-"""Market Prediction sensors."""
+"""Sensor platform for Market Prediction integration."""
 import logging
+from datetime import datetime
 from typing import Any, Dict, Optional
 
-from homeassistant.components.sensor import SensorEntity, SensorStateClass
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    UNIQUE_ID_SP500,
+    UNIQUE_ID_FTSE100,
+    UNIQUE_ID_PROGRESS,
+    UNIQUE_ID_STATUS,
+    UNIQUE_ID_CURRENT_SOURCE,
+    UNIQUE_ID_PROCESSING_TIME,
+)
 from .coordinator import MarketPredictionCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,93 +28,50 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Market Prediction sensors."""
+    """Set up the sensor platform."""
     coordinator: MarketPredictionCoordinator = hass.data[DOMAIN][config_entry.entry_id]
 
     entities = [
-        MarketPredictionSensor(coordinator, "sp500", "S&P 500"),
-        MarketPredictionSensor(coordinator, "ftse", "FTSE 100"),
-        MarketProgressSensor(coordinator),
-        MarketStatusSensor(coordinator),
-        MarketCurrentSourceSensor(coordinator),
-        MarketProcessingTimeSensor(coordinator),
+        MarketPredictionSensor(coordinator, "sp500", "S&P 500", UNIQUE_ID_SP500),
+        MarketPredictionSensor(coordinator, "ftse100", "FTSE 100", UNIQUE_ID_FTSE100),
+        MarketPredictionProgressSensor(coordinator),
+        MarketPredictionStatusSensor(coordinator),
+        MarketPredictionCurrentSourceSensor(coordinator),
+        MarketPredictionProcessingTimeSensor(coordinator),
     ]
 
     async_add_entities(entities)
 
 
 class MarketPredictionSensor(CoordinatorEntity, SensorEntity):
-    """Market prediction sensor."""
+    """Representation of a Market Prediction sensor."""
 
     def __init__(
         self,
         coordinator: MarketPredictionCoordinator,
-        market: str,
+        market_key: str,
         market_name: str,
+        unique_id: str,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
-        self._market = market
+        self._market_key = market_key
         self._market_name = market_name
+        self._attr_unique_id = unique_id
         self._attr_name = f"Market Prediction {market_name}"
-        self._attr_unique_id = f"{DOMAIN}_{market}"
-        self._attr_icon = "mdi:trending-up"
-        self._attr_state_class = None
+        self._attr_icon = "mdi:chart-line"
 
     @property
     def native_value(self) -> Optional[str]:
         """Return the state of the sensor."""
-        if not self.coordinator.data or "predictions" not in self.coordinator.data:
+        if not self.coordinator.data:
             return "No prediction data available"
 
-        prediction = self.coordinator.data["predictions"].get(self._market)
-        if not prediction:
+        market_data = self.coordinator.data.get(self._market_key)
+        if not market_data:
             return "No prediction data available"
 
-        direction = prediction.get("direction", "FLAT")
-        magnitude = prediction.get("magnitude", 0)
-        
-        if direction == "FLAT":
-            return "FLAT 0.0%"
-        
-        return f"{direction} {magnitude}%"
-
-    @property
-    def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional state attributes."""
-        if not self.coordinator.data or "predictions" not in self.coordinator.data:
-            return {}
-
-        prediction = self.coordinator.data["predictions"].get(self._market, {})
-        metadata = self.coordinator.data.get("metadata", {})
-        
-        attributes = {
-            "direction": prediction.get("direction", "FLAT"),
-            "magnitude": prediction.get("magnitude", 0),
-            "confidence": prediction.get("confidence", 0),
-            "technical_score": prediction.get("technical_score", 0),
-            "sentiment_score": prediction.get("sentiment_score", 0),
-            "last_updated": metadata.get("last_updated"),
-            "processing_time": metadata.get("processing_time", 0),
-            "sources_processed": metadata.get("sources_processed", 0),
-            "sentiment_items_processed": metadata.get("sentiment_items_processed", 0),
-        }
-        
-        # Add sentiment source details if available
-        if "sentiment_data" in self.coordinator.data:
-            sentiment_sources = self.coordinator.data["sentiment_data"].get("sources", [])
-            top_sources = sorted(sentiment_sources, key=lambda x: x.get("impact", 0), reverse=True)[:3]
-            attributes["top_sentiment_sources"] = [
-                {
-                    "source": source.get("source", "Unknown"),
-                    "sentiment": round(source.get("sentiment", 0), 3),
-                    "weight": source.get("weight", 0),
-                    "impact": round(source.get("impact", 0), 3),
-                }
-                for source in top_sources
-            ]
-        
-        return attributes
+        return market_data.get("state", "Unknown")
 
     @property
     def available(self) -> bool:
@@ -113,95 +79,123 @@ class MarketPredictionSensor(CoordinatorEntity, SensorEntity):
         return (
             self.coordinator.last_update_success
             and self.coordinator.data is not None
-            and "predictions" in self.coordinator.data
-            and self._market in self.coordinator.data["predictions"]
+            and self._market_key in self.coordinator.data
         )
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        # Update icon based on prediction direction
-        if self.coordinator.data and "predictions" in self.coordinator.data:
-            prediction = self.coordinator.data["predictions"].get(self._market, {})
-            direction = prediction.get("direction", "FLAT")
-            
-            if direction == "UP":
-                self._attr_icon = "mdi:trending-up"
-            elif direction == "DOWN":
-                self._attr_icon = "mdi:trending-down"
-            else:
-                self._attr_icon = "mdi:trending-neutral"
-        
-        super()._handle_coordinator_update()
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        """Return the state attributes."""
+        if not self.coordinator.data or self._market_key not in self.coordinator.data:
+            return {}
+
+        market_data = self.coordinator.data[self._market_key]
+        attrs = {
+            "direction": market_data.get("direction", "FLAT"),
+            "percentage": market_data.get("percentage", 0),
+            "confidence": f"{market_data.get('confidence', 0):.1f}%",
+            "technical_score": f"{market_data.get('technical_score', 0):.3f}",
+            "sentiment_score": f"{market_data.get('sentiment_score', 0):.3f}",
+            "last_update": market_data.get("last_update"),
+            "market": self._market_name,
+        }
+
+        # Add technical details if available
+        technical_details = market_data.get("technical_details", {})
+        if technical_details:
+            attrs.update({
+                "rsi": f"{technical_details.get('rsi', 50):.1f}",
+                "moving_average_signal": f"{technical_details.get('ma_signal', 0):.3f}",
+                "momentum": f"{technical_details.get('momentum', 0):.3f}",
+                "volatility": f"{technical_details.get('volatility', 0):.3f}",
+            })
+
+        return attrs
+
+    @property
+    def icon(self) -> str:
+        """Return the icon of the sensor."""
+        if not self.coordinator.data or self._market_key not in self.coordinator.data:
+            return "mdi:chart-line"
+
+        market_data = self.coordinator.data[self._market_key]
+        direction = market_data.get("direction", "FLAT")
+
+        if direction == "UP":
+            return "mdi:trending-up"
+        elif direction == "DOWN":
+            return "mdi:trending-down"
+        else:
+            return "mdi:chart-line"
 
 
-class MarketProgressSensor(CoordinatorEntity, SensorEntity):
-    """Market prediction progress sensor."""
+class MarketPredictionProgressSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for tracking prediction analysis progress."""
 
     def __init__(self, coordinator: MarketPredictionCoordinator) -> None:
-        """Initialize the sensor."""
+        """Initialize the progress sensor."""
         super().__init__(coordinator)
+        self._attr_unique_id = UNIQUE_ID_PROGRESS
         self._attr_name = "Market Prediction Progress"
-        self._attr_unique_id = f"{DOMAIN}_progress"
-        self._attr_icon = "mdi:progress-clock"
+        self._attr_icon = "mdi:progress-check"
         self._attr_native_unit_of_measurement = "%"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
 
     @property
     def native_value(self) -> int:
         """Return the progress percentage."""
-        return self.coordinator.progress_percent
+        return self.coordinator.progress
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional state attributes."""
-        eta_minutes = self.coordinator.eta_seconds // 60
-        eta_seconds = self.coordinator.eta_seconds % 60
-        
+        """Return progress attributes."""
         return {
-            "stage": self.coordinator.current_stage,
+            "status": self.coordinator.status,
             "current_source": self.coordinator.current_source,
             "eta_seconds": self.coordinator.eta_seconds,
-            "eta_formatted": f"{eta_minutes}m {eta_seconds}s" if eta_minutes > 0 else f"{eta_seconds}s",
-            "processing_time": round(self.coordinator.processing_time, 1),
-            "processing_time_formatted": f"{self.coordinator.processing_time:.1f}s",
+            "eta_formatted": f"{int(self.coordinator.eta_seconds // 60)}:{int(self.coordinator.eta_seconds % 60):02d}",
         }
 
 
-class MarketStatusSensor(CoordinatorEntity, SensorEntity):
-    """Market prediction status sensor."""
+class MarketPredictionStatusSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for tracking prediction analysis status."""
 
     def __init__(self, coordinator: MarketPredictionCoordinator) -> None:
-        """Initialize the sensor."""
+        """Initialize the status sensor."""
         super().__init__(coordinator)
+        self._attr_unique_id = UNIQUE_ID_STATUS
         self._attr_name = "Market Prediction Status"
-        self._attr_unique_id = f"{DOMAIN}_status"
         self._attr_icon = "mdi:information"
 
     @property
     def native_value(self) -> str:
         """Return the current status."""
-        return self.coordinator.current_stage
+        return self.coordinator.status
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional state attributes."""
-        return {
-            "progress": self.coordinator.progress_percent,
+        """Return status attributes."""
+        attrs = {
+            "progress": self.coordinator.progress,
             "current_source": self.coordinator.current_source,
-            "processing_time": round(self.coordinator.processing_time, 1),
         }
 
+        if self.coordinator.data:
+            attrs.update({
+                "last_update": self.coordinator.data.get("last_update"),
+                "processing_time": f"{self.coordinator.data.get('processing_time', 0):.1f}s",
+            })
 
-class MarketCurrentSourceSensor(CoordinatorEntity, SensorEntity):
-    """Market prediction current source sensor."""
+        return attrs
+
+
+class MarketPredictionCurrentSourceSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for tracking current data source being processed."""
 
     def __init__(self, coordinator: MarketPredictionCoordinator) -> None:
-        """Initialize the sensor."""
+        """Initialize the current source sensor."""
         super().__init__(coordinator)
+        self._attr_unique_id = UNIQUE_ID_CURRENT_SOURCE
         self._attr_name = "Market Prediction Current Source"
-        self._attr_unique_id = f"{DOMAIN}_current_source"
-        self._attr_icon = "mdi:newspaper"
+        self._attr_icon = "mdi:database"
 
     @property
     def native_value(self) -> str:
@@ -210,39 +204,49 @@ class MarketCurrentSourceSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional state attributes."""
+        """Return current source attributes."""
         return {
-            "stage": self.coordinator.current_stage,
-            "progress": self.coordinator.progress_percent,
+            "status": self.coordinator.status,
+            "progress": self.coordinator.progress,
         }
 
 
-class MarketProcessingTimeSensor(CoordinatorEntity, SensorEntity):
-    """Market prediction processing time sensor."""
+class MarketPredictionProcessingTimeSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for tracking processing time."""
 
     def __init__(self, coordinator: MarketPredictionCoordinator) -> None:
-        """Initialize the sensor."""
+        """Initialize the processing time sensor."""
         super().__init__(coordinator)
+        self._attr_unique_id = UNIQUE_ID_PROCESSING_TIME
         self._attr_name = "Market Prediction Processing Time"
-        self._attr_unique_id = f"{DOMAIN}_processing_time"
         self._attr_icon = "mdi:timer"
         self._attr_native_unit_of_measurement = "s"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_device_class = SensorDeviceClass.DURATION
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> Optional[float]:
         """Return the processing time in seconds."""
-        return round(self.coordinator.processing_time, 1)
+        if self.coordinator.data:
+            return self.coordinator.data.get("processing_time")
+        elif self.coordinator.processing_start_time:
+            return (datetime.now() - self.coordinator.processing_start_time).total_seconds()
+        return None
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional state attributes."""
-        processing_time = self.coordinator.processing_time
-        minutes = int(processing_time // 60)
-        seconds = int(processing_time % 60)
-        
-        return {
-            "formatted_time": f"{minutes}m {seconds}s" if minutes > 0 else f"{seconds}s",
-            "stage": self.coordinator.current_stage,
-            "eta_seconds": self.coordinator.eta_seconds,
+        """Return processing time attributes."""
+        attrs = {
+            "status": self.coordinator.status,
+            "progress": self.coordinator.progress,
         }
+
+        if self.coordinator.processing_start_time:
+            attrs["started_at"] = self.coordinator.processing_start_time.isoformat()
+
+        if self.coordinator.eta_seconds > 0:
+            attrs.update({
+                "eta_seconds": self.coordinator.eta_seconds,
+                "eta_formatted": f"{int(self.coordinator.eta_seconds // 60)}:{int(self.coordinator.eta_seconds % 60):02d}",
+            })
+
+        return attrs
