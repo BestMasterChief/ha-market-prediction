@@ -1,4 +1,4 @@
-# Market Prediction System v2.2.2
+# Market Prediction System v2.2.3
 
 ## ⚠️ IMPORTANT FINANCIAL DISCLAIMER ⚠️
 
@@ -14,10 +14,11 @@
 A sophisticated Home Assistant integration that predicts S&P 500 and FTSE 100 market movements using Renaissance Technologies-inspired quantitative analysis, combining technical indicators with multi-source sentiment analysis.
 
 <p align="center">
-  <a href="https://www.buymeacoffee.com/bestmasterchief" target="_blank">
-    <img src="https://img.shields.io/badge/Buy&nbsp;me&nbsp;a&nbsp;coffee-Support&nbsp;Dev-yellow?style=for-the-badge&logo=buy-me-a-coffee" alt="Buy Me A Coffee">
-  </a>
+  <a href="https://www.buymeacoffee.com/bestmasterchief" target="_blank">
+    <img src="https://img.shields.io/badge/Buy&nbsp;me&nbsp;a&nbsp;coffee-Support&nbsp;Dev-yellow?style=for-the-badge&logo=buy-me-a-coffee" alt="Buy Me A Coffee">
+  </a>
 </p>
+
 ## Features
 
 ### 🔮 Market Predictions
@@ -37,9 +38,11 @@ A sophisticated Home Assistant integration that predicts S&P 500 and FTSE 100 ma
 - **Dashboard Ready**: Pre-configured cards for immediate integration
 - **Automation Support**: Trigger automations based on market predictions
 - **Error Handling**: Comprehensive error recovery and status reporting
+- **Options Flow**: Configure update intervals and analysis settings after setup
 
 ### 🔧 Configuration
 - **UI Configuration**: Set up API keys through Home Assistant's interface
+- **Reconfiguration Support**: Change settings anytime via the Configure button
 - **Optional APIs**: Alpha Vantage (required) + Financial Modeling Prep (optional for enhanced sentiment)
 - **Rate Limiting**: Built-in API quota management and throttling
 - **Update Scheduling**: Configurable prediction refresh intervals
@@ -66,6 +69,7 @@ A sophisticated Home Assistant integration that predicts S&P 500 and FTSE 100 ma
    - Search for "Market Prediction System"
    - Enter your Alpha Vantage API key (required)
    - Optionally enter Financial Modeling Prep API key
+   - Configure update intervals and prediction times
    - Click "Submit"
 
 ### Manual Installation
@@ -93,6 +97,22 @@ A sophisticated Home Assistant integration that predicts S&P 500 and FTSE 100 ma
 - **Free Tier**: 250 API calls per day
 - **Get API Key**: [https://financialmodelingprep.com/developer/docs](https://financialmodelingprep.com/developer/docs)
 - **Used For**: Enhanced sentiment analysis, additional news sources
+
+## Configuration Options
+
+After initial setup, you can reconfigure the integration at any time:
+
+1. **Go to Settings → Devices & Services**
+2. **Find "Market Prediction System"**
+3. **Click "Configure"** to change API keys and intervals
+4. **Click "Options"** to adjust analysis settings
+
+### Available Options:
+- **Update Interval**: How often predictions refresh (1-24 hours)
+- **Prediction Times**: When to run analysis (e.g., "06:30,12:00,17:30")
+- **Weekend Analysis**: Enable/disable weekend market analysis
+- **Confidence Threshold**: Minimum confidence for predictions (10-95%)
+- **Max Prediction Change**: Cap predictions at realistic levels (1-10%)
 
 ## Sensor Entities
 
@@ -149,8 +169,8 @@ automation:
 - **RSI Analysis (25%)**: 14-day Relative Strength Index for overbought/oversold conditions
 - **Momentum Analysis (30%)**: 5-day price momentum evaluation
 - **Moving Average Analysis (25%)**: 5-day and 10-day trend convergence
-- **Volatility Assessment (10%)**: Price volatility impact on prediction confidence
 - **Volume Analysis (15%)**: Trading volume confirmation signals
+- **Volatility Assessment (5%)**: Price volatility impact on prediction confidence
 
 ### Sentiment Analysis (25% Weight)
 - **Multi-Source Processing**: 10 financial news sources with reliability weighting
@@ -183,6 +203,10 @@ automation:
 - Check logs for specific error messages
 - Verify API keys are valid and active
 
+**"sensor no longer has a state class" error**
+- This is resolved in v2.2.3 with proper state_class definitions
+- Restart Home Assistant after updating
+
 ### Debug Logging
 
 Add to `configuration.yaml`:
@@ -197,12 +221,19 @@ logger:
 
 The integration supports automatic updates through HACS when new versions are released. Release notes and changelogs are provided with each update to track new features and bug fixes.
 
-### Current Version: 2.2.2
-- ✅ Fixed GitHub validation errors
+### Current Version: 2.2.3
+- ✅ Fixed Home Assistant 2025 state_class compatibility
+- ✅ Fixed GitHub validation errors (HACS and flake8)
+- ✅ Added Options Flow for reconfiguration
 - ✅ Enhanced multi-source sentiment analysis
-- ✅ Real-time progress tracking
-- ✅ Improved error handling
-- ✅ Home Assistant 2025 compatibility
+- ✅ Real-time progress tracking with source display
+- ✅ Improved error handling and API validation
+
+### Update Log
+- **v2.2.3**: Fixed state_class errors, added options flow, GitHub validation fixes
+- **v2.2.2**: Enhanced sentiment analysis, improved progress tracking
+- **v2.2.1**: Home Assistant 2025 compatibility updates
+- **v2.2.0**: Multi-source sentiment analysis implementation
 
 ## Support
 

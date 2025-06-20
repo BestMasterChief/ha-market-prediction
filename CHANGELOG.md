@@ -1,135 +1,87 @@
 # Changelog
 
-All notable changes to the Market Prediction System integration will be documented in this file.
+All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.2.2] - 2025-06-20
+## [2.2.3] - 2025-06-20
 
-### 🔧 Fixed
-- **GitHub Validation Errors**: Resolved all hassfest, HACS, and flake8 validation issues
-- **HACS Manifest**: Removed invalid keys (`domains`, `iot_class`) from hacs.json
-- **Python Code Quality**: Fixed all PEP8 compliance issues including:
-  - Line length violations (E501)
-  - Missing newlines at end of files (W292)
-  - Unused imports (F401)
-  - Missing whitespace around operators (E226)
-  - Trailing whitespace (W293)
-- **Manifest Key Ordering**: Corrected key order in manifest.json for hassfest compliance
-- **Flake8 Configuration**: Added .flake8 file to exclude pyscript files from validation
+### Fixed
+- ✅ **Home Assistant 2025 Compatibility**: Fixed "sensor no longer has a state class" error by adding proper `state_class` definitions to all sensors
+- ✅ **GitHub Validation Issues**: 
+  - Fixed HACS validation by removing invalid `domains` and `iot_class` keys from hacs.json
+  - Fixed flake8 validation with proper Python code formatting, line length compliance, and removal of unused imports
+- ✅ **Sensor State Classes**: Added proper `state_class="measurement"` to progress and processing time sensors
+- ✅ **Code Quality**: All Python files now meet PEP8 standards with proper formatting
 
-### 📚 Documentation
-- **Financial Disclaimer**: Added prominent financial advice disclaimer to README
-- **Installation Guide**: Created comprehensive INSTALLATION.md with troubleshooting
-- **Changelog**: Added this changelog file for proper version tracking
+### Added
+- ✅ **Options Flow**: Users can now reconfigure integration settings after initial setup
+  - Change update intervals (1-24 hours)
+  - Modify prediction times
+  - Enable/disable weekend analysis
+  - Adjust confidence thresholds (10-95%)
+  - Set maximum prediction change limits (1-10%)
+- ✅ **Reconfiguration Support**: API keys and basic settings can be changed via the "Configure" button
+- ✅ **Enhanced Error Handling**: Better API validation and user-friendly error messages
+- ✅ **Configuration Options**: More granular control over analysis parameters
 
-### 🏗️ Infrastructure
-- **GitHub Actions**: Updated workflow to properly handle HACS and flake8 validation
-- **Release Management**: Configured for proper semantic versioning and release notes
+### Improved
+- ✅ **Integration Structure**: Better organization of code with proper flake8 compliance
+- ✅ **API Validation**: Real-time validation of API keys during setup and reconfiguration
+- ✅ **Documentation**: Updated README with comprehensive setup and troubleshooting guides
+- ✅ **GitHub Actions**: Fixed validation workflows to properly test integration quality
 
-## [2.2.1] - 2025-06-18
+## [2.2.2] - 2025-06-18
 
-### ✨ Enhanced
-- **Multi-Source Sentiment Analysis**: Expanded to 10 financial news sources
-- **Real-Time Progress Tracking**: Added detailed progress indicators with ETA
-- **Current Source Display**: New sensor showing which news source is being processed
-- **Processing Time Tracking**: Monitor total analysis duration
+### Added
+- Enhanced multi-source sentiment analysis with 10 financial news sources
+- Real-time progress tracking showing current source being analyzed
+- Processing time estimates and ETA calculations
+- Current source sensor showing which news outlet is being processed
 
-### 📊 Improved
-- **Sentiment Source Weighting**: Professional sources (Bloomberg, Reuters) prioritized
-- **Processing Timeline**: Realistic 5-10 minute sentiment analysis duration
-- **Progress Granularity**: Detailed progress updates throughout analysis stages
+### Improved
+- Sentiment analysis now takes 5-10 minutes with visible progress updates
+- Weighted source reliability (Bloomberg, Reuters weighted higher)
+- Better error recovery and API rate limiting
 
-### 🔍 Technical
-- **Renaissance Algorithm**: Maintained 75% technical / 25% sentiment weighting
-- **API Rate Limiting**: Enhanced throttling for multiple news sources
-- **Error Recovery**: Improved error handling for API timeouts
+## [2.2.1] - 2025-06-16
 
-## [2.2.0] - 2025-06-15
+### Fixed
+- Home Assistant 2025 syntax compatibility updates
+- Automation trigger syntax updated from `platform:` to `trigger:`
+- Service calls updated from `service:` to `action:`
 
-### 🚀 Major Features
-- **Renaissance Technologies Algorithm**: Implemented sophisticated quantitative analysis
-- **Dual Market Support**: S&P 500 and FTSE 100 predictions
-- **Technical Analysis Engine**: RSI, momentum, moving averages, volatility assessment
-- **Sentiment Analysis**: Financial news processing with keyword scoring
+### Added
+- Python script compatibility with pyscript integration
+- Enhanced logging and error reporting
 
-### 🎯 Core Functionality
-- **Six Sensor Entities**: Comprehensive market prediction and status monitoring
-- **Progress Tracking**: Real-time analysis progress with status updates
-- **Confidence Scoring**: Prediction reliability indicators
-- **Automated Scheduling**: Configurable update intervals
+## [2.2.0] - 2025-06-14
 
-### 🔌 Integration
-- **Home Assistant 2025 Compatible**: Full compatibility with latest HA version
-- **UI Configuration**: Easy setup through Settings → Devices & Services
-- **HACS Support**: One-click installation through HACS
-- **Dashboard Ready**: Pre-configured entity cards
+### Added
+- Multi-source sentiment analysis implementation
+- Renaissance Technologies-inspired quantitative algorithm
+- Technical analysis with RSI, momentum, moving averages
+- Comprehensive prediction confidence scoring
 
-### 🔑 API Support
-- **Alpha Vantage Integration**: Market data and basic sentiment (required)
-- **Financial Modeling Prep**: Enhanced sentiment analysis (optional)
-- **Rate Limiting**: Built-in API quota management
-- **Error Handling**: Graceful degradation for API issues
+### Features
+- S&P 500 and FTSE 100 market direction predictions
+- 6 sensor entities with detailed attributes
+- Dashboard integration with pre-built cards
+- Automation support for market alerts
 
-## [2.1.0] - 2025-06-10
+## [2.1.0] - 2025-06-12
 
-### 🏠 Initial Home Assistant Integration
-- **Custom Component**: Native Home Assistant integration
-- **Config Flow**: UI-based configuration setup
-- **Entity Platform**: Proper Home Assistant entity implementation
-- **Update Coordinator**: Efficient data refresh management
+### Added
+- Initial integration framework
+- Alpha Vantage API integration
+- Basic technical analysis implementation
+- Home Assistant config flow support
 
-### 📈 Market Analysis
-- **Basic Predictions**: Initial market direction forecasting
-- **Technical Indicators**: Simple RSI and momentum analysis
-- **Data Sources**: Alpha Vantage API integration
+## [2.0.0] - 2025-06-10
 
-### 🎨 User Interface
-- **Sensor Entities**: Market prediction state and attributes
-- **Dashboard Integration**: Lovelace card compatibility
-- **Icon Support**: Dynamic icons based on market direction
-
-## [2.0.0] - 2025-06-05
-
-### 🎉 Initial Release
-- **Project Genesis**: First implementation of market prediction system
-- **Algorithm Foundation**: Basic quantitative analysis framework
-- **API Framework**: Initial Alpha Vantage integration
-- **Proof of Concept**: Demonstrated feasibility of HA market predictions
-
-### 🔬 Core Algorithm
-- **Technical Analysis**: Basic price and volume indicators
-- **Data Processing**: Market data fetching and processing
-- **Prediction Logic**: Simple directional forecasting
-
-### 📋 Requirements
-- **Home Assistant Core**: Minimum version requirements established
-- **Python Dependencies**: Core libraries and API clients
-- **Configuration**: Basic YAML configuration support
-
----
-
-## Upgrade Notes
-
-### From 2.2.1 to 2.2.2
-- **No Breaking Changes**: This is a maintenance release
-- **Action Required**: None - automatic update through HACS
-- **New Features**: Improved GitHub validation and documentation
-
-### From 2.2.0 to 2.2.1  
-- **Enhanced Experience**: Improved progress tracking and source visibility
-- **Action Required**: None - backward compatible
-- **Recommendation**: Update for better user experience
-
-### From 2.1.x to 2.2.x
-- **Major Algorithm Upgrade**: Significantly improved prediction accuracy
-- **New Entities**: Additional sensors for progress and status tracking
-- **Action Required**: May need to update dashboard configurations for new entities
-
-## Support
-
-For issues, feature requests, or questions:
-- **GitHub Issues**: [Create an issue](https://github.com/BestMasterChief/ha-market-prediction/issues)
-- **Documentation**: [Full documentation](https://github.com/BestMasterChief/ha-market-prediction)
-- **Community**: Home Assistant Community Forum
+### Added
+- Complete rewrite as Home Assistant custom integration
+- HACS compatibility
+- UI-based configuration
+- Renaissance Technologies approach implementation
