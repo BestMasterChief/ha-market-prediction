@@ -1,4 +1,0 @@
-manual_prediction:
-  name: Manual Prediction
-  description: Manually trigger market predictions for both FTSE and S&P 500
-  fields: {}

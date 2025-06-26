@@ -1,20 +1,16 @@
 {
-  "domain": "ha_market_predictor",
-  "name": "HA Market Predictor",
-  "documentation": "https://github.com/your-username/ha-market-predictor",
-  "issue_tracker": "https://github.com/your-username/ha-market-predictor/issues",
-  "version": "1.0.0",
-  "codeowners": [
-    "@your-username"
-  ],
-  "requirements": [
-    "requests",
-    "yfinance",
-    "python-dateutil",
-    "pytz"
-  ],
-  "dependencies": [],
+  "domain": "market_prediction",
+  "name": "Market Prediction System",
+  "codeowners": ["@BestMasterChief"],
   "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/BestMasterChief/ha-market-prediction",
+  "integration_type": "service",
   "iot_class": "cloud_polling",
-  "integration_type": "service"
+  "issue_tracker": "https://github.com/BestMasterChief/ha-market-prediction/issues",
+  "requirements": [
+    "aiohttp>=3.8.0",
+    "asyncio-throttle>=1.0.2"
+  ],
+  "version": "2.2.3"
 }

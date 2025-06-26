@@ -1,30 +1,118 @@
-"""Constants for the HA Market Predictor integration."""
+"""Constants for the Market Prediction System integration."""
 from datetime import timedelta
 
-DOMAIN = "ha_market_predictor"
+DOMAIN = "market_prediction"
+UPDATE_INTERVAL = timedelta(hours=3)
 
-# Configuration keys
-CONF_ALPHAVANTAGE_API_KEY = "alphavantage_api_key"
-CONF_FINANCIALMODELPREP_API_KEY = "financialmodelprep_api_key"
+# API Configuration
+ALPHA_VANTAGE_BASE_URL = "https://www.alphavantage.co/query"
+FMP_BASE_URL = "https://financialmodelingprep.com/api/v3"
+
+# Default configuration
+DEFAULT_UPDATE_INTERVAL = 3
+DEFAULT_PREDICTION_TIMES = "06:30,12:00,17:30"
+DEFAULT_CONFIDENCE_THRESHOLD = 50
+DEFAULT_MAX_PREDICTION_CHANGE = 4.0
 
 # API Limits
-ALPHAVANTAGE_DAILY_LIMIT = 25
-FINANCIALMODELPREP_DAILY_LIMIT = 250
+ALPHA_VANTAGE_DAILY_LIMIT = 500
+FMP_DAILY_LIMIT = 250
 
-# Update intervals
-DEFAULT_UPDATE_INTERVAL = timedelta(hours=1)
+# Sentiment Analysis Sources
+SENTIMENT_SOURCES = [
+    {
+        "name": "Alpha Vantage News",
+        "weight": 5.0,
+        "items": 20,
+        "api_delay": 1.2,
+        "reliability": "high"
+    },
+    {
+        "name": "Bloomberg Market", 
+        "weight": 4.5,
+        "items": 10,
+        "api_delay": 1.8,
+        "reliability": "high"
+    },
+    {
+        "name": "Reuters Financial",
+        "weight": 4.5,
+        "items": 12,
+        "api_delay": 1.1,
+        "reliability": "high"
+    },
+    {
+        "name": "Marketaux Financial",
+        "weight": 4.0,
+        "items": 15,
+        "api_delay": 1.5,
+        "reliability": "medium"
+    },
+    {
+        "name": "Finnhub Sentiment",
+        "weight": 4.0,
+        "items": 18,
+        "api_delay": 1.0,
+        "reliability": "medium"
+    },
+    {
+        "name": "Financial Times",
+        "weight": 4.0,
+        "items": 8,
+        "api_delay": 1.4,
+        "reliability": "high"
+    },
+    {
+        "name": "Wall Street Journal",
+        "weight": 4.0,
+        "items": 15,
+        "api_delay": 1.0,
+        "reliability": "high"
+    },
+    {
+        "name": "CNBC Market News",
+        "weight": 3.5,
+        "items": 22,
+        "api_delay": 0.7,
+        "reliability": "medium"
+    },
+    {
+        "name": "Yahoo Finance",
+        "weight": 3.0,
+        "items": 25,
+        "api_delay": 0.6,
+        "reliability": "medium"
+    },
+    {
+        "name": "MarketWatch",
+        "weight": 3.0,
+        "items": 15,
+        "api_delay": 0.9,
+        "reliability": "medium"
+    },
+]
 
-# Market symbols
-FTSE_SYMBOL = "^FTSE"
-SP500_SYMBOL = "^GSPC"
+# Technical Analysis Weights (Renaissance Technologies inspired)
+TECHNICAL_WEIGHTS = {
+    "rsi_analysis": 0.25,      # RSI overbought/oversold conditions
+    "momentum_analysis": 0.30,  # 5-day price momentum
+    "moving_average": 0.25,     # 5-day vs 10-day MA convergence
+    "volume_analysis": 0.15,    # Volume confirmation
+    "volatility": 0.05,         # Volatility impact on confidence
+}
 
-# Market timings (in UTC for consistency)
-FTSE_PRE_MARKET_HOUR = 7  # 7:00 AM UK time (1 hour before 8:00 AM open)
-FTSE_PRE_CLOSE_HOUR = 15  # 3:30 PM UK time (1 hour before 4:30 PM close)
-SP500_PRE_MARKET_HOUR = 13  # 8:30 AM ET in UTC (1 hour before 9:30 AM open)
-SP500_PRE_CLOSE_HOUR = 20  # 3:00 PM ET in UTC (1 hour before 4:00 PM close)
+# Sentiment Analysis Weight
+SENTIMENT_WEIGHT = 0.25
+TECHNICAL_WEIGHT = 0.75
 
-# Entity names
-FTSE_PREDICTION_ENTITY = "ftse_prediction"
-SP500_PREDICTION_ENTITY = "sp500_prediction"
-API_USAGE_ENTITY = "api_usage_today"
+# Market Symbols
+MARKET_SYMBOLS = {
+    "sp500": {"symbol": "SPY", "name": "S&P 500"},
+    "ftse100": {"symbol": "VTI", "name": "FTSE 100"},  # Using VTI as proxy
+}
+
+# Prediction Limits
+MAX_PREDICTION_PERCENTAGE = 4.0
+MIN_PREDICTION_PERCENTAGE = 0.1
+MAX_CONFIDENCE = 95
+MIN_CONFIDENCE = 10
